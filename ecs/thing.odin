@@ -3,24 +3,22 @@ package ecs
 import "core:mem"
 // >-------------------------------------------------------- Constants and Types
 
+Thing_Idx :: u32
+Thing_Gen :: u16
 THING_IDX_BITS :: 20
 THING_GEN_BITS :: 12
 THING_MAX_IDX :: 1 << THING_IDX_BITS
 THING_MAX_GEN :: 1 << THING_GEN_BITS
 THING_NIL :: Thing{}
 
-Thing_Idx :: u32
-Thing_Gen :: u16
-
 Thing :: bit_field u32 {
 	idx: Thing_Idx | THING_IDX_BITS,
 	gen: Thing_Gen | THING_GEN_BITS,
 }
 
-Thing_Slot :: bit_field u16 {
-	gen:      Thing_Gen | THING_GEN_BITS,
-	is_alive: bool      | 1,
-}
+THING_POOL_MIN_CAPACITY :: 64
+THING_POOL_MAX_CAPACITY :: 1 << THING_IDX_BITS
+THING_POOL_DEFAULT_CAPACITY :: 1 << 16
 
 Thing_Pool :: struct {
 	slots:      []Thing_Slot,
@@ -29,10 +27,23 @@ Thing_Pool :: struct {
 	free_count: int,
 }
 
+Thing_Slot :: bit_field u16 {
+	gen:      Thing_Gen | THING_GEN_BITS,
+	is_alive: bool      | 1,
+}
+
 // >----------------------------------------------------------------- Thing_Pool
 
-thing_pool_init :: proc(capacity: int) -> Thing_Pool {
-	assert(capacity >= 64, "Thing pool capacity has to be greater or equal to 64.")
+thing_pool_init :: proc(capacity: int = THING_POOL_DEFAULT_CAPACITY) -> Thing_Pool {
+	assert(
+		capacity >= THING_POOL_MIN_CAPACITY,
+		"Thing pool capacity has to be greater or equal to THING_POOL_MIN_CAPACITY.",
+	)
+
+	assert(
+		capacity <= THING_POOL_MAX_CAPACITY,
+		"Thing pool capacity has to be less or equal to THING_POOL_MAX_CAPACITY.",
+	)
 
 	pool := Thing_Pool {
 		slots      = make([]Thing_Slot, capacity),
@@ -77,20 +88,19 @@ thing_pool_spawn :: proc(pool: ^Thing_Pool) -> Thing {
 		slot := &pool.slots[idx]
 		slot.is_alive = true
 		slot.gen += 1
-		pool.slots_next += 1
 
 		return Thing{idx = idx, gen = slot.gen}
 	} else {
-		assert(pool.slots_next > thing_pool_capacity(pool^), "Thing pool is full.")
+		assert(pool.slots_next < thing_pool_capacity(pool^), "Thing pool is full.")
 
-		idx := len(pool.slots)
+		idx := pool.slots_next
 		pool.slots[idx] = Thing_Slot {
 			gen      = 0,
 			is_alive = true,
 		}
 
 		pool.slots_next += 1
-		return Thing{idx = Thing_Idx(idx), gen = 1}
+		return Thing{idx = Thing_Idx(idx), gen = 0}
 	}
 }
 
@@ -115,5 +125,4 @@ thing_pool_kill_unchecked :: proc(pool: ^Thing_Pool, thing: Thing) {
 	slot.is_alive = false
 	pool.free[pool.free_count] = thing.idx
 	pool.free_count += 1
-	pool.slots_next -= 1
 }

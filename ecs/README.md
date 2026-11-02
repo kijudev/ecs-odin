@@ -5,11 +5,23 @@
 
 ## `Thing_Pool` design
 
-Thing pool consists of three arrays: alive bitset containing boolean flags, generations array of `u16`,
-and a stack of free slots that could be reused.
-This approach allows for optimal memory access when checking if a thing is alive or valid.
-It also allows for some heuristics to be chosen when slots are being recycled. The stack can be
-used to reserve some space for a bunch of things to be allocated close to one another.
+Thing pool consists of two fixed-size arrays allocated up front:
+
+- `slots` - one `Thing_Slot` per index, a `u16` bit field packing the 12-bit `gen` and an `is_alive` flag.
+  Keeping both in one slot means checking a thing is a single memory read.
+- `free` - a stack of killed indices that can be reused.
+
+Slot `0` is reserved for `THING_NIL`, so a pool of capacity `N` holds at most `N - 1` things.
+`slots_next` is the next never-used index. Spawning pops from the free stack first and only
+takes a fresh slot when the stack is empty. Reusing a slot bumps its `gen`, which invalidates
+stale handles to it. Fresh slots start at `gen = 0`.
+
+The free stack also leaves room for recycling heuristics later, e.g. reserving a run of slots so
+a bunch of things are allocated close to one another.
+
+`gen` is 12 bits, so it wraps after `THING_MAX_GEN` (4096) reuses of the same slot. A handle that
+is exactly that many generations stale becomes valid again. This is the trade-off for
+packing a handle into a `u32`.
 
 # Parts
 
