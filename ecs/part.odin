@@ -110,7 +110,7 @@ part_pool_insert :: proc(pool: ^Part_Pool, thing: Thing, part: rawptr = nil) -> 
 }
 
 part_pool_insert_unchecked :: proc(pool: ^Part_Pool, thing: Thing, part: rawptr = nil) -> rawptr {
-	page := part_pool_ensure_page(pool, page_idx(thing.idx))
+	page := ensure_page(pool, page_idx(thing.idx))
 
 	idx := pool.parts_size
 	result := parts_append(pool, part)
@@ -142,7 +142,18 @@ part_pool_remove_unchecked :: proc(pool: ^Part_Pool, thing: Thing) {
 	parts_remove_swap(pool, idx)
 }
 
-part_pool_ensure_page :: proc(pool: ^Part_Pool, idx: int) -> ^Part_Pool_Page {
+part_pool_slice :: proc(pool: ^Part_Pool) -> []byte {
+	return pool.parts_data[:pool.parts_size * pool.part_size]
+}
+
+part_pool_thing_slice :: proc(pool: ^Part_Pool) -> []Thing {
+	return pool.things[:pool.parts_size]
+}
+
+// >------------------------------------------------------------------ Internals
+
+@(private = "file")
+ensure_page :: proc(pool: ^Part_Pool, idx: int) -> ^Part_Pool_Page {
 	if pool.indices[idx] == nil {
 		page, err := new(Part_Pool_Page, pool.allocator)
 		if err != nil do panic("Failed to allocate memory for part pool page.")
@@ -152,8 +163,6 @@ part_pool_ensure_page :: proc(pool: ^Part_Pool, idx: int) -> ^Part_Pool_Page {
 
 	return pool.indices[idx]
 }
-
-// >------------------------------------------------------------------ Internals
 
 @(private = "file")
 page_idx :: #force_inline proc(idx: Thing_Idx) -> int {

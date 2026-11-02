@@ -14,8 +14,8 @@ init_creates_empty_pool :: proc(t: ^testing.T) {
 	defer ecs.thing_pool_destroy(&pool)
 
 	testing.expect_value(t, ecs.thing_pool_capacity(pool), ecs.THING_POOL_MIN_CAPACITY)
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 0)
-	testing.expect_value(t, ecs.thing_pool_free_count(pool), 0)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 0)
+	testing.expect_value(t, ecs.thing_pool_count_free(pool), 0)
 }
 
 @(test)
@@ -60,8 +60,8 @@ reset_invalidates_all_things :: proc(t: ^testing.T) {
 
 	testing.expect(t, !ecs.thing_pool_check(pool, a))
 	testing.expect(t, !ecs.thing_pool_check(pool, b))
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 0)
-	testing.expect_value(t, ecs.thing_pool_free_count(pool), 0)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 0)
+	testing.expect_value(t, ecs.thing_pool_count_free(pool), 0)
 	testing.expect_value(t, ecs.thing_pool_capacity(pool), ecs.THING_POOL_MIN_CAPACITY)
 
 	// Pool is usable again after reset.
@@ -94,7 +94,7 @@ spawn_returns_valid_thing :: proc(t: ^testing.T) {
 
 	testing.expect(t, thing != ecs.THING_NIL)
 	testing.expect(t, ecs.thing_pool_check(pool, thing))
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 1)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 1)
 }
 
 @(test)
@@ -110,7 +110,7 @@ spawn_returns_distinct_things :: proc(t: ^testing.T) {
 	testing.expect(t, a.idx != b.idx)
 	testing.expect(t, b.idx != c.idx)
 	testing.expect(t, a.idx != c.idx)
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 3)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 3)
 }
 
 @(test)
@@ -126,7 +126,7 @@ spawn_fills_pool_to_capacity :: proc(t: ^testing.T) {
 		testing.expect(t, ecs.thing_pool_check(pool, thing))
 	}
 
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), usable)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), usable)
 }
 
 // >----------------------------------------------------------------------- Kill
@@ -141,8 +141,8 @@ kill_invalidates_thing :: proc(t: ^testing.T) {
 
 	testing.expect(t, ecs.thing_pool_kill(&pool, thing))
 	testing.expect(t, !ecs.thing_pool_check(pool, thing))
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 0)
-	testing.expect_value(t, ecs.thing_pool_free_count(pool), 1)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 0)
+	testing.expect_value(t, ecs.thing_pool_count_free(pool), 1)
 }
 
 @(test)
@@ -155,7 +155,7 @@ kill_twice_fails :: proc(t: ^testing.T) {
 
 	testing.expect(t, ecs.thing_pool_kill(&pool, thing))
 	testing.expect(t, !ecs.thing_pool_kill(&pool, thing))
-	testing.expect_value(t, ecs.thing_pool_free_count(pool), 1)
+	testing.expect_value(t, ecs.thing_pool_count_free(pool), 1)
 }
 
 @(test)
@@ -173,7 +173,7 @@ kill_leaves_other_things_alive :: proc(t: ^testing.T) {
 	testing.expect(t, ecs.thing_pool_check(pool, a))
 	testing.expect(t, !ecs.thing_pool_check(pool, b))
 	testing.expect(t, ecs.thing_pool_check(pool, c))
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 2)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 2)
 }
 
 @(test)
@@ -205,7 +205,7 @@ spawn_reuses_killed_slot_with_new_gen :: proc(t: ^testing.T) {
 	testing.expect(t, new.gen != old.gen)
 	testing.expect(t, ecs.thing_pool_check(pool, new))
 	testing.expect(t, !ecs.thing_pool_check(pool, old))
-	testing.expect_value(t, ecs.thing_pool_free_count(pool), 0)
+	testing.expect_value(t, ecs.thing_pool_count_free(pool), 0)
 }
 
 @(test)
@@ -230,16 +230,16 @@ alive_count_tracks_spawn_kill_reuse :: proc(t: ^testing.T) {
 
 	a := ecs.thing_pool_spawn(&pool)
 	ecs.thing_pool_spawn(&pool)
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 2)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 2)
 
 	ecs.thing_pool_kill(&pool, a)
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 1)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 1)
 
 	ecs.thing_pool_spawn(&pool) // reuses a's slot
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 2)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 2)
 
 	ecs.thing_pool_spawn(&pool) // fresh slot
-	testing.expect_value(t, ecs.thing_pool_alive_count(pool), 3)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 3)
 }
 
 @(test)

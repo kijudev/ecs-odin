@@ -14,6 +14,7 @@ Archetype_Pool :: struct($P: typeid) where intrinsics.type_is_enum(P) {
 	allocator: mem.Allocator,
 }
 
+PART_MAX_COUNT :: 128
 ARCHETYPE_POOL_MIN_CAPACITY :: THING_POOL_MIN_CAPACITY
 ARCHETYPE_POOL_MAX_CAPACITY :: THING_POOL_MAX_CAPACITY
 ARCHETYPE_POOL_DEFAULT_CAPACITY :: THING_POOL_DEFAULT_CAPACITY
@@ -64,4 +65,12 @@ archetype_pool_insert :: proc(pool: ^Archetype_Pool($P), thing: Thing, kind: P) 
 
 archetype_pool_remove :: proc(pool: ^Archetype_Pool($P), thing: Thing, kind: P) {
 	pool.slots[thing.idx].mask -= {kind}
+}
+
+archetype_pool_remove_all :: proc(pool: ^Archetype_Pool($P), thing: Thing) {
+	pool.slots[thing.idx].mask = {}
+}
+
+archetype_pool_get_mask :: proc(pool: Archetype_Pool($P), thing: Thing) -> bit_set[P] {
+	return pool.slots[thing.idx].mask
 }
