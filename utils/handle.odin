@@ -29,6 +29,7 @@ Handle_Pool :: struct($T: typeid) {
 	free:       []Handle_Idx,
 	slots_next: int,
 	free_count: int,
+	allocator:  mem.Allocator,
 }
 
 Handle_Slot :: bit_field u16 {
@@ -49,7 +50,11 @@ handle_make :: proc($T: typeid, idx: Handle_Idx, gen: Handle_Gen = 0) -> Handle(
 
 // >---------------------------------------------------------------- Handle_Pool
 
-handle_pool_init :: proc(pool: ^Handle_Pool($T), capacity: int) {
+handle_pool_init :: proc(
+	pool: ^Handle_Pool($T),
+	capacity: int,
+	allocator: mem.Allocator = context.allocator,
+) {
 	assert(
 		capacity >= HANDLE_POOL_MIN_CAPACITY,
 		"Handle pool capacity has to be greater or equal to HANDLE_POOL_MIN_CAPACITY.",
@@ -61,16 +66,17 @@ handle_pool_init :: proc(pool: ^Handle_Pool($T), capacity: int) {
 	)
 
 	pool^ = Handle_Pool(T) {
-		slots      = make([]Handle_Slot, capacity),
-		free       = make([]Handle_Idx, capacity),
+		slots      = make([]Handle_Slot, capacity, allocator),
+		free       = make([]Handle_Idx, capacity, allocator),
 		slots_next = 1,
 		free_count = 0,
+		allocator  = allocator,
 	}
 }
 
 handle_pool_destroy :: proc(pool: ^Handle_Pool($T)) {
-	delete(pool.slots)
-	delete(pool.free)
+	delete(pool.slots, pool.allocator)
+	delete(pool.free, pool.allocator)
 	pool^ = Handle_Pool(T){}
 }
 

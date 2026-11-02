@@ -10,7 +10,8 @@ Archetype :: struct($P: typeid) where intrinsics.type_is_enum(P) {
 }
 
 Archetype_Pool :: struct($P: typeid) where intrinsics.type_is_enum(P) {
-	slots: []Archetype(P),
+	slots:     []Archetype(P),
+	allocator: mem.Allocator,
 }
 
 ARCHETYPE_POOL_MIN_CAPACITY :: THING_POOL_MIN_CAPACITY
@@ -22,6 +23,7 @@ ARCHETYPE_POOL_DEFAULT_CAPACITY :: THING_POOL_DEFAULT_CAPACITY
 archetype_pool_init :: proc(
 	pool: ^Archetype_Pool($P),
 	capacity: int = ARCHETYPE_POOL_DEFAULT_CAPACITY,
+	allocator: mem.Allocator = context.allocator,
 ) {
 	assert(
 		capacity >= ARCHETYPE_POOL_MIN_CAPACITY,
@@ -33,11 +35,14 @@ archetype_pool_init :: proc(
 		"Archetype pool capacity has to be less or equal to ARCHETYPE_POOL_MAX_CAPACITY.",
 	)
 
-	pool.slots = make([]Archetype(P), capacity)
+	pool^ = Archetype_Pool(P) {
+		slots     = make([]Archetype(P), capacity, allocator),
+		allocator = allocator,
+	}
 }
 
 archetype_pool_destroy :: proc(pool: ^Archetype_Pool($P)) {
-	delete(pool.slots)
+	delete(pool.slots, pool.allocator)
 	pool^ = Archetype_Pool(P){}
 }
 

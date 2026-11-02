@@ -1,5 +1,7 @@
 package ecs
 
+import "core:mem"
+
 import "../utils"
 
 // >-------------------------------------------------------- Constants and Types
@@ -29,8 +31,12 @@ thing_make :: proc(idx: Thing_Idx, gen: Thing_Gen = 0) -> Thing {
 
 // >----------------------------------------------------------------- Thing_Pool
 
-thing_pool_init :: proc(pool: ^Thing_Pool, capacity: int = THING_POOL_DEFAULT_CAPACITY) {
-	utils.handle_pool_init(pool, capacity)
+thing_pool_init :: proc(
+	pool: ^Thing_Pool,
+	capacity: int = THING_POOL_DEFAULT_CAPACITY,
+	allocator: mem.Allocator = context.allocator,
+) {
+	utils.handle_pool_init(pool, capacity, allocator)
 }
 
 thing_pool_destroy :: utils.handle_pool_destroy

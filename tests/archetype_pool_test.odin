@@ -1,5 +1,6 @@
 package ecs_tests
 
+import "core:mem"
 import "core:testing"
 
 import ecs "../ecs"
@@ -34,6 +35,22 @@ archetype_pool_destroy_zeroes_pool :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, ecs.archetype_pool_capacity(pool), 0)
 	testing.expect(t, pool.slots == nil)
+}
+
+@(test)
+archetype_pool_destroy_frees_with_init_allocator :: proc(t: ^testing.T) {
+	track: mem.Tracking_Allocator
+	mem.tracking_allocator_init(&track, context.allocator)
+	defer mem.tracking_allocator_destroy(&track)
+
+	pool: ecs.Archetype_Pool(Part_Kind)
+	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY, mem.tracking_allocator(&track))
+	testing.expect(t, len(track.allocation_map) > 0)
+
+	// Destroy runs under the default context.allocator, not the init one.
+	ecs.archetype_pool_destroy(&pool)
+	testing.expect_value(t, len(track.allocation_map), 0)
+	testing.expect_value(t, len(track.bad_free_array), 0)
 }
 
 @(test)
