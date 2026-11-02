@@ -31,11 +31,12 @@ zero_sized_part: u8
 // >------------------------------------------------------------------ Part_Pool
 
 part_pool_init :: proc(
+	pool: ^Part_Pool,
 	part_info: ^runtime.Type_Info,
 	destroy_part: proc(part: rawptr) = nil,
 	allocator: mem.Allocator = context.allocator,
-) -> Part_Pool {
-	pool := Part_Pool {
+) {
+	pool^ = Part_Pool {
 		part_info      = part_info,
 		part_size      = part_info.size,
 		part_align     = part_info.align,
@@ -47,8 +48,6 @@ part_pool_init :: proc(
 		destroy_part   = destroy_part,
 		allocator      = allocator,
 	}
-
-	return pool
 }
 
 part_pool_destroy :: proc(pool: ^Part_Pool) {

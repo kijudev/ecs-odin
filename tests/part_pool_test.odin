@@ -25,7 +25,8 @@ count_destroyed :: proc(part: rawptr) {
 
 @(test)
 part_pool_init_creates_empty_pool :: proc(t: ^testing.T) {
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	testing.expect_value(t, ecs.part_pool_count(&pool), 0)
@@ -34,9 +35,11 @@ part_pool_init_creates_empty_pool :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_reset_removes_all_parts :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position), count_destroyed)
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position), count_destroyed)
 	defer ecs.part_pool_destroy(&pool)
 	destroyed_count = 0
 
@@ -59,9 +62,11 @@ part_pool_reset_removes_all_parts :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_destroy_destroys_parts :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position), count_destroyed)
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position), count_destroyed)
 	destroyed_count = 0
 
 	ecs.part_pool_insert(&pool, ecs.thing_pool_spawn(&things))
@@ -75,9 +80,11 @@ part_pool_destroy_destroys_parts :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_insert_copies_part :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	thing := ecs.thing_pool_spawn(&things)
@@ -93,9 +100,11 @@ part_pool_insert_copies_part :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_insert_nil_zero_initialises :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&things)
@@ -111,9 +120,11 @@ part_pool_insert_nil_zero_initialises :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_insert_existing_overwrites :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position), count_destroyed)
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position), count_destroyed)
 	defer ecs.part_pool_destroy(&pool)
 	destroyed_count = 0
 
@@ -130,9 +141,11 @@ part_pool_insert_existing_overwrites :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_insert_grows_capacity :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	spawned: [ecs.THING_POOL_MIN_CAPACITY - 1]ecs.Thing
@@ -153,9 +166,11 @@ part_pool_insert_grows_capacity :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_insert_from_own_part_survives_growth :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&things)
@@ -172,7 +187,8 @@ part_pool_insert_from_own_part_survives_growth :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_insert_across_pages :: proc(t: ^testing.T) {
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	low := ecs.thing_make(1)
@@ -191,9 +207,11 @@ part_pool_insert_across_pages :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_parts_are_aligned :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Aligned))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Aligned))
 	defer ecs.part_pool_destroy(&pool)
 
 	for _ in 0 ..< 8 {
@@ -206,9 +224,11 @@ part_pool_parts_are_aligned :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_get_missing_returns_nil :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&things)
@@ -223,9 +243,11 @@ part_pool_get_missing_returns_nil :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_stale_thing_does_not_see_part :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	old := ecs.thing_pool_spawn(&things)
@@ -241,9 +263,11 @@ part_pool_stale_thing_does_not_see_part :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_insert_for_reused_idx_takes_over_slot :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position))
 	defer ecs.part_pool_destroy(&pool)
 
 	// Old thing dies without its part being removed.
@@ -262,9 +286,11 @@ part_pool_insert_for_reused_idx_takes_over_slot :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_remove_keeps_other_parts :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position), count_destroyed)
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position), count_destroyed)
 	defer ecs.part_pool_destroy(&pool)
 	destroyed_count = 0
 
@@ -294,9 +320,11 @@ part_pool_remove_keeps_other_parts :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_remove_missing_returns_false :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Position), count_destroyed)
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Position), count_destroyed)
 	defer ecs.part_pool_destroy(&pool)
 	destroyed_count = 0
 
@@ -315,9 +343,11 @@ part_pool_remove_missing_returns_false :: proc(t: ^testing.T) {
 
 @(test)
 part_pool_supports_zero_sized_parts :: proc(t: ^testing.T) {
-	things := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&things)
-	pool := ecs.part_pool_init(type_info_of(Tag))
+	pool: ecs.Part_Pool
+	ecs.part_pool_init(&pool, type_info_of(Tag))
 	defer ecs.part_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&things)

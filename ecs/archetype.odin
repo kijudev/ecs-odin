@@ -1,6 +1,7 @@
 package ecs
 
 import "base:intrinsics"
+import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
 
@@ -53,9 +54,9 @@ archetype_pool_has :: proc(pool: Archetype_Pool($P), thing: Thing, kind: P) -> b
 }
 
 archetype_pool_insert :: proc(pool: ^Archetype_Pool($P), thing: Thing, kind: P) {
-	pool.slots[thing.idx].mask |= kind
+	pool.slots[thing.idx].mask += {kind}
 }
 
 archetype_pool_remove :: proc(pool: ^Archetype_Pool($P), thing: Thing, kind: P) {
-	pool.slots[thing.idx].mask &= ~kind
+	pool.slots[thing.idx].mask -= {kind}
 }

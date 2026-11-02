@@ -49,7 +49,7 @@ handle_make :: proc($T: typeid, idx: Handle_Idx, gen: Handle_Gen = 0) -> Handle(
 
 // >---------------------------------------------------------------- Handle_Pool
 
-handle_pool_init :: proc($T: typeid, capacity: int) -> Handle_Pool(T) {
+handle_pool_init :: proc(pool: ^Handle_Pool($T), capacity: int) {
 	assert(
 		capacity >= HANDLE_POOL_MIN_CAPACITY,
 		"Handle pool capacity has to be greater or equal to HANDLE_POOL_MIN_CAPACITY.",
@@ -60,14 +60,12 @@ handle_pool_init :: proc($T: typeid, capacity: int) -> Handle_Pool(T) {
 		"Handle pool capacity has to be less or equal to HANDLE_POOL_MAX_CAPACITY.",
 	)
 
-	pool := Handle_Pool(T) {
+	pool^ = Handle_Pool(T) {
 		slots      = make([]Handle_Slot, capacity),
 		free       = make([]Handle_Idx, capacity),
 		slots_next = 1,
 		free_count = 0,
 	}
-
-	return pool
 }
 
 handle_pool_destroy :: proc(pool: ^Handle_Pool($T)) {

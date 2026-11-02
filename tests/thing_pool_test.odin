@@ -8,7 +8,8 @@ import ecs "../ecs"
 
 @(test)
 init_creates_empty_pool :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	testing.expect_value(t, ecs.thing_pool_capacity(pool), ecs.THING_POOL_MIN_CAPACITY)
@@ -18,7 +19,8 @@ init_creates_empty_pool :: proc(t: ^testing.T) {
 
 @(test)
 destroy_zeroes_pool :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	ecs.thing_pool_spawn(&pool)
 	ecs.thing_pool_destroy(&pool)
 
@@ -29,7 +31,8 @@ destroy_zeroes_pool :: proc(t: ^testing.T) {
 
 @(test)
 reset_invalidates_all_things :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&pool)
@@ -53,7 +56,8 @@ reset_invalidates_all_things :: proc(t: ^testing.T) {
 
 @(test)
 nil_thing_is_never_valid :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	testing.expect(t, !ecs.thing_pool_check(pool, ecs.THING_NIL))
@@ -65,7 +69,8 @@ nil_thing_is_never_valid :: proc(t: ^testing.T) {
 
 @(test)
 spawn_returns_valid_thing :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	thing := ecs.thing_pool_spawn(&pool)
@@ -77,7 +82,8 @@ spawn_returns_valid_thing :: proc(t: ^testing.T) {
 
 @(test)
 spawn_returns_distinct_things :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&pool)
@@ -92,7 +98,8 @@ spawn_returns_distinct_things :: proc(t: ^testing.T) {
 
 @(test)
 spawn_fills_pool_to_capacity :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	// Slot 0 is reserved for THING_NIL.
@@ -109,7 +116,8 @@ spawn_fills_pool_to_capacity :: proc(t: ^testing.T) {
 
 @(test)
 kill_invalidates_thing :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	thing := ecs.thing_pool_spawn(&pool)
@@ -122,7 +130,8 @@ kill_invalidates_thing :: proc(t: ^testing.T) {
 
 @(test)
 kill_twice_fails :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	thing := ecs.thing_pool_spawn(&pool)
@@ -134,7 +143,8 @@ kill_twice_fails :: proc(t: ^testing.T) {
 
 @(test)
 kill_leaves_other_things_alive :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&pool)
@@ -151,7 +161,8 @@ kill_leaves_other_things_alive :: proc(t: ^testing.T) {
 
 @(test)
 check_rejects_out_of_range_idx :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	thing := ecs.thing_make(ecs.Thing_Idx(ecs.thing_pool_capacity(pool)), 1)
@@ -165,7 +176,8 @@ check_rejects_out_of_range_idx :: proc(t: ^testing.T) {
 
 @(test)
 spawn_reuses_killed_slot_with_new_gen :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	old := ecs.thing_pool_spawn(&pool)
@@ -181,7 +193,8 @@ spawn_reuses_killed_slot_with_new_gen :: proc(t: ^testing.T) {
 
 @(test)
 stale_thing_cannot_kill_new_thing :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	old := ecs.thing_pool_spawn(&pool)
@@ -194,7 +207,8 @@ stale_thing_cannot_kill_new_thing :: proc(t: ^testing.T) {
 
 @(test)
 alive_count_tracks_spawn_kill_reuse :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&pool)
@@ -213,7 +227,8 @@ alive_count_tracks_spawn_kill_reuse :: proc(t: ^testing.T) {
 
 @(test)
 reuse_then_fresh_spawn_does_not_collide :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	a := ecs.thing_pool_spawn(&pool)
@@ -229,7 +244,8 @@ reuse_then_fresh_spawn_does_not_collide :: proc(t: ^testing.T) {
 
 @(test)
 gen_wraps_around_after_max_gen_reuses :: proc(t: ^testing.T) {
-	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
 	first := ecs.thing_pool_spawn(&pool)
