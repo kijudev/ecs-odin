@@ -1,6 +1,7 @@
 package ecs
 
 import "../utils"
+
 // >-------------------------------------------------------- Constants and Types
 
 Thing_Tag :: struct {}
@@ -19,6 +20,12 @@ THING_NIL :: Thing{}
 THING_POOL_MIN_CAPACITY :: utils.HANDLE_POOL_MIN_CAPACITY
 THING_POOL_MAX_CAPACITY :: utils.HANDLE_POOL_MAX_CAPACITY
 THING_POOL_DEFAULT_CAPACITY :: 1 << 16
+
+// >---------------------------------------------------------------------- Thing
+
+thing_make :: proc(idx: Thing_Idx, gen: Thing_Gen = 0) -> Thing {
+	return utils.handle_make(Thing_Tag, idx, gen)
+}
 
 // >----------------------------------------------------------------- Thing_Pool
 

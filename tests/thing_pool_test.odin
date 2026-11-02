@@ -154,10 +154,8 @@ check_rejects_out_of_range_idx :: proc(t: ^testing.T) {
 	pool := ecs.thing_pool_init(ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
-	thing := ecs.Thing {
-		idx = ecs.Thing_Idx(ecs.thing_pool_capacity(pool)),
-		gen = 1,
-	}
+	thing := ecs.thing_make(ecs.Thing_Idx(ecs.thing_pool_capacity(pool)), 1)
+	testing.expect(t, thing != ecs.THING_NIL)
 
 	testing.expect(t, !ecs.thing_pool_check(pool, thing))
 	testing.expect(t, !ecs.thing_pool_kill(&pool, thing))

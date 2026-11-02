@@ -36,6 +36,17 @@ Handle_Slot :: bit_field u16 {
 	is_alive: bool       | 1,
 }
 
+// >--------------------------------------------------------------------- Handle
+
+// Fields promoted from a `using` bit_field are silently dropped in composite
+// literals, so `Handle(T){idx = 1}` is nil. Build handles through this instead.
+handle_make :: proc($T: typeid, idx: Handle_Idx, gen: Handle_Gen = 0) -> Handle(T) {
+	assert(idx < HANDLE_MAX_IDX, "Handle idx has to be less than HANDLE_MAX_IDX.")
+	assert(gen < HANDLE_MAX_GEN, "Handle gen has to be less than HANDLE_MAX_GEN.")
+
+	return Handle(T){raw = {idx = idx, gen = gen}}
+}
+
 // >---------------------------------------------------------------- Handle_Pool
 
 handle_pool_init :: proc($T: typeid, capacity: int) -> Handle_Pool(T) {
@@ -93,7 +104,7 @@ handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 		slot.is_alive = true
 		slot.gen += 1
 
-		return Handle(T){raw = {idx = idx, gen = slot.gen}}
+		return handle_make(T, idx, slot.gen)
 	} else {
 		assert(pool.slots_next < handle_pool_capacity(pool^), "Handle pool is full.")
 
@@ -104,7 +115,7 @@ handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 		}
 
 		pool.slots_next += 1
-		return Handle(T){raw = {idx = Handle_Idx(idx), gen = 0}}
+		return handle_make(T, Handle_Idx(idx))
 	}
 }
 
