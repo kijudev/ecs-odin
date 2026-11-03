@@ -91,11 +91,11 @@ handle_pool_capacity :: proc(pool: Handle_Pool($T)) -> int {
 	return len(pool.slots)
 }
 
-handle_pool_alive_count :: proc(pool: Handle_Pool($T)) -> int {
+handle_pool_count_alive :: proc(pool: Handle_Pool($T)) -> int {
 	return pool.slots_next - 1 - pool.free_count
 }
 
-handle_pool_free_count :: proc(pool: Handle_Pool($T)) -> int {
+handle_pool_count_free :: proc(pool: Handle_Pool($T)) -> int {
 	return pool.free_count
 }
 

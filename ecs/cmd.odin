@@ -81,7 +81,7 @@ cmd_pool_reset :: proc(pool: ^Cmd_Pool($P)) {
 	clear(&pool.parts)
 }
 
-cmd_pool_count :: proc(pool: ^Cmd_Pool($P)) -> int {
+cmd_pool_count_cmds :: proc(pool: ^Cmd_Pool($P)) -> int {
 	return len(pool.commands)
 }
 
@@ -89,7 +89,7 @@ cmd_pool_parts_size :: proc(pool: ^Cmd_Pool($P)) -> int {
 	return len(pool.parts)
 }
 
-cmd_pool_slice :: proc(pool: ^Cmd_Pool($P)) -> []Cmd(P) {
+cmd_pool_get_cmds :: proc(pool: ^Cmd_Pool($P)) -> []Cmd(P) {
 	return pool.commands[:]
 }
 

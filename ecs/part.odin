@@ -71,7 +71,7 @@ part_pool_reset :: proc(pool: ^Part_Pool) {
 	pool.parts_size = 0
 }
 
-part_pool_count :: proc(pool: ^Part_Pool) -> int {
+part_pool_count_parts :: proc(pool: ^Part_Pool) -> int {
 	return pool.parts_size
 }
 
@@ -84,14 +84,14 @@ part_pool_has :: proc(pool: ^Part_Pool, thing: Thing) -> bool {
 	return ok
 }
 
-part_pool_get :: proc(pool: ^Part_Pool, thing: Thing) -> rawptr {
+part_pool_get_part :: proc(pool: ^Part_Pool, thing: Thing) -> rawptr {
 	idx, ok := dense_idx(pool, thing)
 	if !ok do return nil
 
 	return parts_get_unchecked(pool, idx)
 }
 
-part_pool_get_unchecked :: proc(pool: ^Part_Pool, thing: Thing) -> rawptr {
+part_pool_get_part_unchecked :: proc(pool: ^Part_Pool, thing: Thing) -> rawptr {
 	return parts_get_unchecked(pool, dense_idx_unchecked(pool, thing))
 }
 
@@ -151,11 +151,11 @@ part_pool_remove_unchecked :: proc(pool: ^Part_Pool, thing: Thing) {
 	parts_remove_swap(pool, idx)
 }
 
-part_pool_slice :: proc(pool: ^Part_Pool) -> []byte {
+part_pool_get_parts :: proc(pool: ^Part_Pool) -> []byte {
 	return pool.parts_data[:pool.parts_size * pool.part_size]
 }
 
-part_pool_thing_slice :: proc(pool: ^Part_Pool) -> []Thing {
+part_pool_get_things :: proc(pool: ^Part_Pool) -> []Thing {
 	return pool.things[:pool.parts_size]
 }
 
