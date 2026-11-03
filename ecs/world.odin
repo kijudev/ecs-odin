@@ -115,13 +115,13 @@ world_get :: proc(world: ^World($P), thing: Thing, kind: P, $T: typeid) -> ^T {
 	return cast(^T)raw
 }
 
-world_set :: proc {
-	world_set_value,
-	world_set_pointer,
-	world_set_zero,
+world_set_now :: proc {
+	world_set_value_now,
+	world_set_pointer_now,
+	world_set_zero_now,
 }
 
-world_set_value :: proc(
+world_set_value_now :: proc(
 	world: ^World($P),
 	thing: Thing,
 	kind: P,
@@ -130,23 +130,23 @@ world_set_value :: proc(
 	T !=
 	typeid {
 	part := part
-	return world_set_pointer(world, thing, kind, &part)
+	return world_set_pointer_now(world, thing, kind, &part)
 }
 
-world_set_pointer :: proc(world: ^World($P), thing: Thing, kind: P, part: ^$T) -> ^T {
+world_set_pointer_now :: proc(world: ^World($P), thing: Thing, kind: P, part: ^$T) -> ^T {
 	assert(world.part_types[kind] == T, "Part kind does not match the provided type.")
 	return cast(^T)set_raw(world, thing, kind, part)
 }
 
-world_set_zero :: proc(world: ^World($P), thing: Thing, kind: P, $T: typeid) -> ^T {
-	return world_set_pointer(world, thing, kind, (^T)(nil))
+world_set_zero_now :: proc(world: ^World($P), thing: Thing, kind: P, $T: typeid) -> ^T {
+	return world_set_pointer_now(world, thing, kind, (^T)(nil))
 }
 
-world_add :: proc(world: ^World($P), thing: Thing, kind: P) -> bool {
+world_add_now :: proc(world: ^World($P), thing: Thing, kind: P) -> bool {
 	return set_raw(world, thing, kind, nil) != nil
 }
 
-world_remove :: proc(world: ^World($P), thing: Thing, kind: P) -> bool {
+world_remove_now :: proc(world: ^World($P), thing: Thing, kind: P) -> bool {
 	assert(kind in world.registered, "Part kind is not registered in the world.")
 
 	if !part_pool_remove(&world.part_pool[kind], thing) do return false
