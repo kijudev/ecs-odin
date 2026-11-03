@@ -25,4 +25,15 @@ on the old value). Inserting with a nil part zero-initialises it. Zero-sized par
 The `_unchecked` variants skip validation: `get`/`remove` assume the part exists, `insert` assumes it
 does not.
 
+# Commands
+
+`Cmd_Pool($P)` records deferred mutations as a `Cmd($P)` union (`Cmd_Kill`, `Cmd_Set_Value`,
+`Cmd_Set_Zero`, `Cmd_Remove`) in record order. It only stores commands; applying them is up to the caller.
+
+Part values are copied into a single `parts` byte buffer, packed without padding. `Cmd_Set_Value`
+keeps the `offset` and `size` of its bytes. `cmd_pool_get_bytes` returns them as a slice, valid until
+the next record, and `cmd_pool_get_part` copies them out as a `T`. No `^T` is handed out because a
+packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buffer is capped at
+`CMD_POOL_MAX_PARTS_SIZE` bytes.
+
 # Systems

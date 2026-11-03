@@ -1,91 +1,157 @@
 package ecs
 
+import "base:intrinsics"
 import "core:mem"
+
 // >-------------------------------------------------------- Constants and Types
 
-Cmd_Part :: u32
-Cmd_Idx :: u32
+Cmd_Offset :: u32
+Cmd_Size :: u32
+
+CMD_POOL_MAX_PARTS_SIZE :: int(max(Cmd_Offset))
+CMD_PART_MAX_SIZE :: int(max(Cmd_Size))
+
+CMD_POOL_DEFAULT_CAPACITY :: 1 << 8
+CMD_POOL_DEFAULT_PARTS_CAPACITY :: 1 << 12
 
 Cmd_Kill :: struct {
 	thing: Thing,
 }
 
-Cmd_Set_Value :: struct {
-	thing: Thing,
-	idx:   Cmd_Idx,
-	part:  Cmd_Part,
+Cmd_Set_Value :: struct($P: typeid) where intrinsics.type_is_enum(P) {
+	thing:  Thing,
+	kind:   P,
+	offset: Cmd_Offset,
+	size:   Cmd_Size,
 }
 
-Cmd_Set_Zero :: struct {
+Cmd_Set_Zero :: struct($P: typeid) where intrinsics.type_is_enum(P) {
 	thing: Thing,
-	part:  Cmd_Part,
+	kind:  P,
 }
 
-Cmd_Remove :: struct {
+Cmd_Remove :: struct($P: typeid) where intrinsics.type_is_enum(P) {
 	thing: Thing,
-	part:  Cmd_Part,
+	kind:  P,
 }
 
-Cmd :: union {
+Cmd :: union($P: typeid) where intrinsics.type_is_enum(P) {
 	Cmd_Kill,
-	Cmd_Set_Value,
-	Cmd_Set_Zero,
+	Cmd_Set_Value(P),
+	Cmd_Set_Zero(P),
+	Cmd_Remove(P),
 }
 
-Cmd_Pool :: struct {
-	commands:    [dynamic]Cmd,
-	parts:       [dynamic]byte,
-	parts_next:  int,
-	parts_count: int,
-	allocator:   mem.Allocator,
+Cmd_Pool :: struct($P: typeid) where intrinsics.type_is_enum(P) {
+	commands:  [dynamic]Cmd(P),
+	parts:     [dynamic]byte,
+	allocator: mem.Allocator,
 }
 
 // >------------------------------------------------------------------- Cmd_Pool
 
-cmd_pool_init :: proc(pool: ^Cmd_Pool, allocator := context.allocator) {
-	pool^ = {
-		commands    = make([dynamic]Cmd, allocator),
-		parts       = make([dynamic]byte, allocator),
-		parts_next  = 0,
-		parts_count = 0,
-		allocator   = allocator,
+cmd_pool_init :: proc(
+	pool: ^Cmd_Pool($P),
+	capacity: int = CMD_POOL_DEFAULT_CAPACITY,
+	parts_capacity: int = CMD_POOL_DEFAULT_PARTS_CAPACITY,
+	allocator: mem.Allocator = context.allocator,
+) {
+	assert(capacity >= 0, "Command pool capacity cannot be negative.")
+	assert(parts_capacity >= 0, "Command pool parts capacity cannot be negative.")
+	assert(
+		parts_capacity <= CMD_POOL_MAX_PARTS_SIZE,
+		"Command pool parts capacity has to be less or equal to CMD_POOL_MAX_PARTS_SIZE.",
+	)
+
+	pool^ = Cmd_Pool(P) {
+		commands  = make([dynamic]Cmd(P), 0, capacity, allocator),
+		parts     = make([dynamic]byte, 0, parts_capacity, allocator),
+		allocator = allocator,
 	}
 }
 
-cmd_pool_destroy :: proc(pool: ^Cmd_Pool) {
+cmd_pool_destroy :: proc(pool: ^Cmd_Pool($P)) {
 	delete(pool.commands)
 	delete(pool.parts)
-	pool^ = {}
+	pool^ = Cmd_Pool(P){}
 }
 
-cmd_pool_reset :: proc(pool: ^Cmd_Pool) {
+cmd_pool_reset :: proc(pool: ^Cmd_Pool($P)) {
 	clear(&pool.commands)
 	clear(&pool.parts)
-	pool.parts_next = 0
-	pool.parts_count = 0
 }
 
-cmd_pool_record_kill :: proc(pool: ^Cmd_Pool, thing: Thing) {
+cmd_pool_count :: proc(pool: ^Cmd_Pool($P)) -> int {
+	return len(pool.commands)
+}
+
+cmd_pool_parts_size :: proc(pool: ^Cmd_Pool($P)) -> int {
+	return len(pool.parts)
+}
+
+cmd_pool_slice :: proc(pool: ^Cmd_Pool($P)) -> []Cmd(P) {
+	return pool.commands[:]
+}
+
+cmd_pool_record_kill :: proc(pool: ^Cmd_Pool($P), thing: Thing) {
+	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
 	append(&pool.commands, Cmd_Kill{thing = thing})
 }
 
-cmd_pool_record_set_value :: proc(pool: ^Cmd_Pool, thing: Thing, part: rawptr, size: int) {
-	if pool.parts_next + size > pool.parts_count {
-		new_size := max(pool.parts_count * 2, pool.parts_next + size)
-		resize(&pool.parts, new_size)
-		pool.parts_count = new_size
-	}
+cmd_pool_record_set_value :: proc(
+	pool: ^Cmd_Pool($P),
+	thing: Thing,
+	kind: P,
+	part: rawptr,
+	size: int,
+) {
+	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
+	assert(size >= 0, "Part size cannot be negative.")
+	assert(size <= CMD_PART_MAX_SIZE, "Part size has to be less or equal to CMD_PART_MAX_SIZE.")
+	assert(part != nil || size == 0, "Cannot record a nil part, use cmd_pool_record_set_zero.")
+	assert(
+		len(pool.parts) + size <= CMD_POOL_MAX_PARTS_SIZE,
+		"Command pool parts size would exceed CMD_POOL_MAX_PARTS_SIZE.",
+	)
 
-	part_offset := pool.parts_next
-	mem.copy(&pool.parts[part_offset], part, size)
-	pool.parts_next += size
+	offset := len(pool.parts)
+	if size > 0 do append(&pool.parts, ..mem.byte_slice(part, size))
 
 	append(
 		&pool.commands,
-		Cmd_Set_Value{thing = thing, idx = Cmd_Idx(part_offset), part = Cmd_Part(size)},
+		Cmd_Set_Value(P) {
+			thing = thing,
+			kind = kind,
+			offset = Cmd_Offset(offset),
+			size = Cmd_Size(size),
+		},
 	)
 }
 
-cmd_pool_record_set_zero :: proc(pool: ^Cmd_Pool, thing: Thing, part: rawptr, size: int) {
-	append(&pool.commands, Cmd_Set_Zero{thing = thing, part = Cmd_Part(size)})
+cmd_pool_record_set_zero :: proc(pool: ^Cmd_Pool($P), thing: Thing, kind: P) {
+	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
+	append(&pool.commands, Cmd_Set_Zero(P){thing = thing, kind = kind})
+}
+
+cmd_pool_record_remove :: proc(pool: ^Cmd_Pool($P), thing: Thing, kind: P) {
+	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
+	append(&pool.commands, Cmd_Remove(P){thing = thing, kind = kind})
+}
+
+cmd_pool_get_bytes :: proc(pool: ^Cmd_Pool($P), offset: Cmd_Offset, size: Cmd_Size) -> []byte {
+	assert(
+		int(offset) + int(size) <= len(pool.parts),
+		"Command part range is out of the parts buffer bounds.",
+	)
+
+	return pool.parts[offset:][:size]
+}
+
+cmd_pool_get_part :: proc(pool: ^Cmd_Pool($P), offset: Cmd_Offset, $T: typeid) -> T {
+	when size_of(T) == 0 {
+		return {}
+	} else {
+		bytes := cmd_pool_get_bytes(pool, offset, Cmd_Size(size_of(T)))
+		return intrinsics.unaligned_load((^T)(raw_data(bytes)))
+	}
 }

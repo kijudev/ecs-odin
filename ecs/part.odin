@@ -8,6 +8,10 @@ import "core:mem"
 PART_POOL_PAGE_COUNT :: 1 << 6
 PART_POOL_PAGE_BITS :: THING_IDX_BITS - 6
 PART_POOL_PAGE_SIZE :: 1 << PART_POOL_PAGE_BITS
+PART_POOL_MAX_CAPACITY :: THING_MAX_IDX
+PART_MAX_COUNT :: 128
+
+#assert(PART_POOL_PAGE_COUNT * PART_POOL_PAGE_SIZE == THING_MAX_IDX)
 
 Part_Idx :: u32
 Part_Pool_Page :: [PART_POOL_PAGE_SIZE]Part_Idx
@@ -36,6 +40,8 @@ part_pool_init :: proc(
 	destroy_part: proc(part: rawptr) = nil,
 	allocator: mem.Allocator = context.allocator,
 ) {
+	assert(part_info != nil, "Part pool needs the part type info.")
+
 	pool^ = Part_Pool {
 		part_info      = part_info,
 		part_size      = part_info.size,
@@ -110,6 +116,9 @@ part_pool_insert :: proc(pool: ^Part_Pool, thing: Thing, part: rawptr = nil) -> 
 }
 
 part_pool_insert_unchecked :: proc(pool: ^Part_Pool, thing: Thing, part: rawptr = nil) -> rawptr {
+	assert(thing != THING_NIL, "Cannot insert a part for THING_NIL.")
+	assert(pool.parts_size < PART_POOL_MAX_CAPACITY, "Part pool is full.")
+
 	page := ensure_page(pool, page_idx(thing.idx))
 
 	idx := pool.parts_size
