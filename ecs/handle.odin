@@ -1,4 +1,4 @@
-package utils
+package ecs
 
 import "core:mem"
 

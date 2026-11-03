@@ -1,39 +1,39 @@
-# Worlds
+# Handles
 
-Worlds are the top-level container for all ECS state. They are essentially a composition of `Thing_Pool`s, `Part_Pool`s, and `Cmd_Pool`s etc.. Each world manages its own set of things and parts, allowing for isolated simulations or game states. This library wants to provide three such implementations:
+`Handle($T)` is an opaque, typed handle. It wraps a `u32` bit field with two parts: 20-bit `idx`
+and a 12-bit `gen` counter. `T` is only a tag, so `Handle(Texture)` and `Handle(Mesh)` can't be
+mixed up, at no runtime cost. A zeroed handle is nil.
 
-- `World_Sync` - a single-threaded world where all operations are performed in a single thread.
-- `World_Async` - a multi-threaded world where operations can be performed in parallel, but is not deterministic.
-- `World_Deterministic` - a multi-threaded world that ensures deterministic behavior across runs.
+`Handle_Pool($T)` only hands out and validates handles; it stores no data. Anything that needs
+data per handle keeps its own array indexed by `handle.idx` and checks the handle against the
+pool before touching it.
 
-## `World_Sync`
+The pool consists of two fixed-size arrays allocated up front:
 
-Mutations come in two flavours:
+- `slots` - one `Handle_Slot` per index, a `u16` bit field packing the 12-bit `gen` and an `is_alive` flag.
+  Keeping both in one slot means checking a handle is a single memory read.
+- `free` - a stack of killed indices that can be reused.
 
-- `_now` (`set_now`, `add_now`, `remove_now`, `kill_now`) apply immediately and report failure for
-  dead things by returning `nil`/`false`.
-- `_later` (`set_later`, `add_later`, `remove_later`, `kill_later`) record into the world's own
-  `Cmd_Pool`. Kind and type are asserted when recording; liveness is checked when applying, so
-  commands for things that are dead by then are skipped. `THING_NIL` is never recorded.
+Slot `0` is reserved for the nil handle, so a pool of capacity `N` holds at most `N - 1` handles.
+`slots_next` is the next never-used index. Spawning pops from the free stack first and only
+takes a fresh slot when the stack is empty. Reusing a slot bumps its `gen`, which invalidates
+stale handles to it. Fresh slots start at `gen = 0`.
 
-`world_sync_apply_self` applies the world's buffer in record order and resets it.
-`world_sync_apply_other` applies a buffer recorded elsewhere and leaves it untouched; the caller
-resets it, and may replay it into several worlds. `world_sync_reset` drops unapplied commands.
+The free stack also leaves room for recycling heuristics later, e.g. reserving a run of slots so
+a bunch of handles are allocated close to one another.
 
-Part values are moved into the world on apply. The buffer itself never runs `destroy` callbacks:
-resetting a buffer that was never applied leaks resources owned by its parts, and applying one
-buffer twice hands the same resources to two parts.
-
-`spawn` has no `_later` variant: the thing is needed right away to record commands for it.
+`gen` is 12 bits, so it wraps after `HANDLE_MAX_GEN` (4096) reuses of the same slot. A handle that
+is exactly that many generations stale becomes valid again. This is the trade-off for
+packing a handle into a `u32`.
 
 # Things
 
-`Thing` is an opaque handle type: `utils.Handle(Thing_Tag)`, a `u32` with a 20-bit `idx` and a 12-bit `gen` counter.
+`Thing` is an opaque handle type: `Handle(Thing_Tag)`, a `u32` with a 20-bit `idx` and a 12-bit `gen` counter.
 `THING_NIL` is a nil handle (zeroed out).
 
-`Thing_Pool` is `utils.Handle_Pool(Thing_Tag)` and the `thing_pool_*` procs are aliases of the
-`utils.handle_pool_*` ones, except `thing_pool_init`, which fixes the tag and adds a default
-capacity. See [`utils/README.md`](../utils/README.md) for the pool design.
+`Thing_Pool` is `Handle_Pool(Thing_Tag)` and the `thing_pool_*` procs are aliases of the
+`handle_pool_*` ones, except `thing_pool_init`, which fixes the tag and adds a default
+capacity. See [Handles](#handles) for the pool design.
 
 # Parts
 
