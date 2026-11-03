@@ -20,10 +20,10 @@ World :: ecs.World(World_Part)
 @(private = "file")
 make_world :: proc(world: ^World) {
 	ecs.world_init(world, ecs.THING_POOL_MIN_CAPACITY)
-	ecs.world_register_part(world, .Position, Position)
-	ecs.world_register_part(world, .Velocity, Velocity, count_destroyed)
-	ecs.world_register_part(world, .Tag, Tag)
-	ecs.world_register_part(world, .Target, Position)
+	ecs.world_register(world, .Position, Position)
+	ecs.world_register(world, .Velocity, Velocity, count_destroyed)
+	ecs.world_register(world, .Tag, Tag)
+	ecs.world_register(world, .Target, Position)
 }
 
 // >------------------------------------------------------------------ Lifecycle

@@ -48,7 +48,7 @@ world_reset :: proc(world: ^World($P)) {
 	}
 }
 
-world_register_part :: proc(
+world_register :: proc(
 	world: ^World($P),
 	kind: P,
 	$T: typeid,
