@@ -12,7 +12,12 @@ World_Part :: enum {
 	Target, // shares the Position type
 }
 
-World :: ecs.World(World_Part)
+World_Resource :: enum {
+	Time,
+	Gravity,
+}
+
+World :: ecs.World(World_Part, World_Resource)
 
 @(private = "file")
 make_world :: proc(world: ^World) {
@@ -46,9 +51,14 @@ every_pool_allocates_with_pool_allocator :: proc(t: ^testing.T) {
 	context.allocator = mem.panic_allocator()
 
 	world: World
-	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, mem.tracking_allocator(&track))
+	ecs.world_init(
+		&world,
+		ecs.THING_POOL_MIN_CAPACITY,
+		pool_allocator = mem.tracking_allocator(&track),
+	)
 	ecs.register(&world, .Position, Position)
 	ecs.register(&world, .Velocity, Velocity)
+	ecs.register_resource(&world, .Time, Time)
 
 	// Grow the part sets, their pages and the command buffer past their first allocation.
 	for _ in 0 ..< 32 {
@@ -112,11 +122,7 @@ set_now_and_get_part :: proc(t: ^testing.T) {
 
 	testing.expect(t, ecs.has(&world, thing, .Position))
 	testing.expect(t, !ecs.has(&world, thing, .Velocity))
-	testing.expect_value(
-		t,
-		ecs.get_part(&world, thing, .Position, Position)^,
-		Position{1, 2},
-	)
+	testing.expect_value(t, ecs.get_part(&world, thing, .Position, Position)^, Position{1, 2})
 	testing.expect(t, ecs.get_part(&world, thing, .Velocity, Velocity) == nil)
 }
 
@@ -155,11 +161,7 @@ set_now_existing_overwrites :: proc(t: ^testing.T) {
 	ecs.set_now(&world, thing, .Position, Position{3, 4})
 
 	testing.expect_value(t, ecs.count_parts(&world, .Position), 1)
-	testing.expect_value(
-		t,
-		ecs.get_part(&world, thing, .Position, Position)^,
-		Position{3, 4},
-	)
+	testing.expect_value(t, ecs.get_part(&world, thing, .Position, Position)^, Position{3, 4})
 }
 
 @(test)
@@ -172,11 +174,7 @@ kinds_can_share_a_type :: proc(t: ^testing.T) {
 	ecs.set_now(&world, thing, .Position, Position{1, 2})
 	ecs.set_now(&world, thing, .Target, Position{5, 6})
 
-	testing.expect_value(
-		t,
-		ecs.get_part(&world, thing, .Position, Position)^,
-		Position{1, 2},
-	)
+	testing.expect_value(t, ecs.get_part(&world, thing, .Position, Position)^, Position{1, 2})
 	testing.expect_value(t, ecs.get_part(&world, thing, .Target, Position)^, Position{5, 6})
 
 	ecs.remove_now(&world, thing, .Target)
@@ -347,11 +345,7 @@ later_waits_for_apply_self :: proc(t: ^testing.T) {
 	ecs.apply_self(&world)
 
 	testing.expect_value(t, ecs.count_cmds(&world), 0)
-	testing.expect_value(
-		t,
-		ecs.get_part(&world, thing, .Position, Position)^,
-		Position{1, 2},
-	)
+	testing.expect_value(t, ecs.get_part(&world, thing, .Position, Position)^, Position{1, 2})
 	testing.expect(t, ecs.has(&world, thing, .Tag))
 }
 
@@ -398,11 +392,7 @@ set_later_overwrites_existing :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, destroyed_count, 1)
 	testing.expect_value(t, ecs.count_parts(&world, .Velocity), 1)
-	testing.expect_value(
-		t,
-		ecs.get_part(&world, thing, .Velocity, Velocity)^,
-		Velocity{3, 4},
-	)
+	testing.expect_value(t, ecs.get_part(&world, thing, .Velocity, Velocity)^, Velocity{3, 4})
 }
 
 @(test)
@@ -591,16 +581,8 @@ apply_other_replays_into_many_worlds :: proc(t: ^testing.T) {
 	ecs.apply_other(&first, &cmds)
 	ecs.apply_other(&second, &cmds)
 
-	testing.expect_value(
-		t,
-		ecs.get_part(&first, thing, .Position, Position)^,
-		Position{1, 2},
-	)
-	testing.expect_value(
-		t,
-		ecs.get_part(&second, thing, .Position, Position)^,
-		Position{1, 2},
-	)
+	testing.expect_value(t, ecs.get_part(&first, thing, .Position, Position)^, Position{1, 2})
+	testing.expect_value(t, ecs.get_part(&second, thing, .Position, Position)^, Position{1, 2})
 }
 
 @(test)
@@ -623,6 +605,58 @@ apply_other_leaves_own_cmds_pending :: proc(t: ^testing.T) {
 	testing.expect_value(t, ecs.count_cmds(&world), 1)
 }
 
+// >------------------------------------------------------------------ Resources
+
+@(test)
+register_resource_and_get :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	testing.expect(t, !ecs.is_resource_registered(&world, .Time))
+	ecs.register_resource(&world, .Time, Time)
+	testing.expect(t, ecs.is_resource_registered(&world, .Time))
+
+	time := ecs.get_resource(&world, .Time, Time)
+	testing.expect_value(t, time^, Time{})
+
+	time.delta = 0.5
+	testing.expect_value(t, ecs.get_resource(&world, .Time, Time)^, Time{0.5, 0})
+}
+
+@(test)
+reset_zeroes_resources_keeps_registrations :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	ecs.register_resource(&world, .Time, Time, count_destroyed_time)
+	ecs.register_resource(&world, .Gravity, f32)
+	ecs.get_resource(&world, .Time, Time)^ = {1, 2}
+	ecs.get_resource(&world, .Gravity, f32)^ = 9.81
+
+	destroyed_resources = {}
+	ecs.world_reset(&world)
+
+	testing.expect_value(t, destroyed_resources[.Time], 1)
+	testing.expect(t, ecs.is_resource_registered(&world, .Time))
+	testing.expect(t, ecs.is_resource_registered(&world, .Gravity))
+	testing.expect_value(t, ecs.get_resource(&world, .Time, Time)^, Time{})
+	testing.expect_value(t, ecs.get_resource(&world, .Gravity, f32)^, 0)
+}
+
+@(test)
+destroy_runs_resource_destroyers :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	ecs.register_resource(&world, .Time, Time, count_destroyed_time)
+
+	destroyed_resources = {}
+	ecs.world_destroy(&world)
+
+	testing.expect_value(t, destroyed_resources[.Time], 1)
+}
+
 // >-------------------------------------------------------------------- Asserts
 
 @(test)
@@ -636,11 +670,48 @@ set_later_wrong_type_asserts_when_recording :: proc(t: ^testing.T) {
 	mem.arena_init(&arena, backing[:])
 
 	world: World
-	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, mem.arena_allocator(&arena))
+	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
 	ecs.register(&world, .Target, Position)
 	thing := ecs.spawn(&world)
 
 	testing.expect_assert_message(t, "Part kind Target is a Position, not a Velocity.")
 	ecs.set_later(&world, thing, .Target, Velocity{1, 2})
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+get_resource_wrong_type_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
+	backing: [1 << 16]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	world: World
+	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+	ecs.register_resource(&world, .Gravity, f32)
+
+	testing.expect_assert_message(t, "Resource Gravity is a f32, not a f64.")
+	ecs.get_resource(&world, .Gravity, f64)
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+get_resource_unregistered_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
+	backing: [1 << 16]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	world: World
+	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+
+	testing.expect_assert_message(t, "Resource Time is not registered in the pool.")
+	ecs.get_resource(&world, .Time, Time)
 	testing.fail_now(t, "The call did not assert.")
 }

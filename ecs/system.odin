@@ -5,9 +5,10 @@ import "core:slice"
 
 // >-------------------------------------------------------- Constants and Types
 
-Context :: struct($P: typeid, $S: typeid) where intrinsics.type_is_enum(P),
+Context :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enum(P),
+	intrinsics.type_is_enum(R),
 	intrinsics.type_is_enum(S) {
-	world: ^World(P),
+	world: ^World(P, R),
 }
 
 System_Info :: struct($P: typeid, $S: typeid) where intrinsics.type_is_enum(P),

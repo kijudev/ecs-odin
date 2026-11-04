@@ -81,6 +81,32 @@ resource_pool_destroyer_sees_the_resource :: proc(t: ^testing.T) {
 	testing.expect_value(t, seen, 9.81)
 }
 
+@(test)
+resource_pool_reset_destroys_and_zeroes_keeps_registrations :: proc(t: ^testing.T) {
+	pool: ecs.Resource_Pool(Resource)
+	ecs.resource_pool_init(&pool, 256)
+	defer ecs.resource_pool_destroy(&pool)
+
+	ecs.resource_pool_register(&pool, .Time, Time, count_destroyed_time)
+	ecs.resource_pool_register(&pool, .Gravity, f32)
+	ecs.resource_pool_get(&pool, .Time, Time)^ = {1, 2}
+	ecs.resource_pool_get(&pool, .Gravity, f32)^ = 9.81
+
+	destroyed_resources = {}
+	ecs.resource_pool_reset(&pool)
+
+	testing.expect_value(t, destroyed_resources[.Time], 1)
+	testing.expect(t, ecs.resource_pool_is_registered(&pool, .Time))
+	testing.expect(t, ecs.resource_pool_is_registered(&pool, .Gravity))
+	testing.expect_value(t, ecs.resource_pool_get(&pool, .Time, Time)^, Time{})
+	testing.expect_value(t, ecs.resource_pool_get(&pool, .Gravity, f32)^, 0)
+
+	// Registering after a reset still appends behind the existing resources.
+	ecs.resource_pool_register(&pool, .Flag, bool)
+	ecs.resource_pool_get(&pool, .Flag, bool)^ = true
+	testing.expect_value(t, ecs.resource_pool_get(&pool, .Gravity, f32)^, 0)
+}
+
 // >------------------------------------------------------------------- Register
 
 @(test)
@@ -89,7 +115,9 @@ resource_pool_register_starts_zeroed :: proc(t: ^testing.T) {
 	ecs.resource_pool_init(&pool, 256)
 	defer ecs.resource_pool_destroy(&pool)
 
+	testing.expect(t, !ecs.resource_pool_is_registered(&pool, .Time))
 	ecs.resource_pool_register(&pool, .Time, Time)
+	testing.expect(t, ecs.resource_pool_is_registered(&pool, .Time))
 	testing.expect_value(t, ecs.resource_pool_get(&pool, .Time, Time)^, Time{})
 }
 

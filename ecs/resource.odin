@@ -41,13 +41,16 @@ resource_pool_init :: proc(
 }
 
 resource_pool_destroy :: proc(pool: ^Resource_Pool($R)) {
-	for resource in pool.registered {
-		destroyer := pool.destroyers[resource]
-		if destroyer != nil do destroyer(get_raw(pool, resource))
-	}
+	destroy_all(pool)
 
 	delete(pool.resources_data, pool.allocator)
 	pool^ = {}
+}
+
+// Destroys and zeroes every resource, keeps the registrations.
+resource_pool_reset :: proc(pool: ^Resource_Pool($R)) {
+	destroy_all(pool)
+	mem.zero_slice(pool.resources_data[:pool.resources_size])
 }
 
 // The resource starts zeroed.
@@ -85,25 +88,56 @@ resource_pool_register :: proc(
 	pool.registered += {resource}
 }
 
-resource_pool_get :: proc(pool: ^Resource_Pool($R), resource: R, $T: typeid) -> ^T {
+resource_pool_is_registered :: proc(pool: ^Resource_Pool($R), resource: R) -> bool {
+	return resource in pool.registered
+}
+
+@(disabled = ODIN_DISABLE_ASSERT)
+resource_pool_assert_registered :: proc(
+	pool: ^Resource_Pool($R),
+	resource: R,
+	loc := #caller_location,
+) {
 	fmt.assertf(
 		resource in pool.registered,
 		"Resource %v is not registered in the pool.",
 		resource,
+		loc = loc,
 	)
+}
 
+@(disabled = ODIN_DISABLE_ASSERT)
+resource_pool_assert_type :: proc(
+	pool: ^Resource_Pool($R),
+	resource: R,
+	$T: typeid,
+	loc := #caller_location,
+) {
+	resource_pool_assert_registered(pool, resource, loc)
 	fmt.assertf(
 		pool.types[resource] == T,
 		"Resource %v is a %v, not a %v.",
 		resource,
 		pool.types[resource],
 		typeid_of(T),
+		loc = loc,
 	)
+}
 
+resource_pool_get :: proc(pool: ^Resource_Pool($R), resource: R, $T: typeid) -> ^T {
+	resource_pool_assert_type(pool, resource, T)
 	return cast(^T)get_raw(pool, resource)
 }
 
 // >------------------------------------------------------------------ Internals
+
+@(private = "file")
+destroy_all :: proc(pool: ^Resource_Pool($R)) {
+	for resource in pool.registered {
+		destroyer := pool.destroyers[resource]
+		if destroyer != nil do destroyer(get_raw(pool, resource))
+	}
+}
 
 @(private = "file")
 get_raw :: proc(pool: ^Resource_Pool($R), resource: R) -> rawptr {

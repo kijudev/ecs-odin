@@ -82,6 +82,17 @@ Parts are set with `set_value`, `set_pointer` (`nil` zeroes the part) or the unt
 There are no proc groups. `remove_all` tries every registered kind; if you already know which
 kinds a thing has, `remove_unchecked` on those is faster.
 
+# Resources
+
+`Resource_Pool($R)` holds one value per kind of `R`, for things that aren't tied to any thing:
+time, input, config. The values are packed into one buffer of a fixed capacity, allocated once in
+`init`, so a resource never moves and its pointer stays valid. Registering puts the next resource
+behind the previous one, aligned for its type, and panics when it doesn't fit anymore.
+
+A resource starts zeroed and is changed through the pointer from `get`. `reset` runs the
+destroyers and zeroes every resource but keeps the registrations; `destroy` runs the destroyers
+and frees the buffer.
+
 # Commands
 
 `Cmd_Pool($P)` records deferred mutations as a `Cmd($P)` union (`Cmd_Kill`, `Cmd_Set_Value`,
@@ -95,8 +106,12 @@ packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buf
 
 # World
 
-`World($P)` owns a `Thing_Pool`, a `Part_Pool(P)`, an
-`Archetype_Pool(P)` and a `Cmd_Pool(P)`.
+`World($P, $R)` owns a `Thing_Pool`, a `Part_Pool(P)`, an `Archetype_Pool(P)`, a `Cmd_Pool(P)` and
+a `Resource_Pool(R)`, all allocated with the one `pool_allocator` passed to `world_init`. A world
+without resources passes an empty enum for `R`.
+
+Resources are reached with `register_resource`, `is_resource_registered` and `get_resource`. They
+have no `_now`/`_later` variants, nothing about them is deferred.
 
 Mutations come in two flavours:
 
@@ -108,7 +123,8 @@ Mutations come in two flavours:
 
 `apply_self` applies the world's buffer in record order and resets it. `apply_other` applies a
 buffer recorded elsewhere and leaves it untouched; the caller resets it, and may replay it into
-several worlds. `reset` drops unapplied commands.
+several worlds. `world_reset` drops unapplied commands, kills every thing and zeroes every
+resource, keeping all registrations.
 
 Part values are moved into the world on apply. The buffer itself never runs `destroy` callbacks:
 resetting a buffer that was never applied leaks resources owned by its parts, and applying one
