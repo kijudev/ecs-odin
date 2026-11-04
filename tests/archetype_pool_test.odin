@@ -3,7 +3,7 @@ package ecs_tests
 import "core:mem"
 import "core:testing"
 
-import ecs "../../ecs"
+import ecs "../ecs"
 
 Part_Kind :: enum {
 	Position,

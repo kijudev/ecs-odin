@@ -14,13 +14,13 @@ PART_MAX_COUNT :: 128
 #assert(PART_POOL_PAGE_COUNT * PART_POOL_PAGE_SIZE == THING_MAX_IDX)
 
 Part_Idx :: u32
-Part_Pool_Page :: [PART_POOL_PAGE_SIZE]Part_Idx
+Part_Pool_Indices :: Inline_Paged_Array(Part_Idx, PART_POOL_PAGE_COUNT, PART_POOL_PAGE_SIZE)
 
 Part_Pool :: struct {
 	part_info:      ^runtime.Type_Info,
 	part_size:      int,
 	part_align:     int,
-	indices:        [PART_POOL_PAGE_COUNT]^Part_Pool_Page,
+	indices:        Part_Pool_Indices,
 	things:         []Thing,
 	parts_data:     []byte,
 	parts_capacity: int,
@@ -54,11 +54,13 @@ part_pool_init :: proc(
 		destroy_part   = destroy_part,
 		allocator      = allocator,
 	}
+
+	inline_paged_array_init(&pool.indices, allocator)
 }
 
 part_pool_destroy :: proc(pool: ^Part_Pool) {
 	parts_destroy_all(pool)
-	pages_free_all(pool)
+	inline_paged_array_destroy(&pool.indices)
 
 	delete(pool.things, pool.allocator)
 	delete(pool.parts_data, pool.allocator)
@@ -67,7 +69,7 @@ part_pool_destroy :: proc(pool: ^Part_Pool) {
 
 part_pool_reset :: proc(pool: ^Part_Pool) {
 	parts_destroy_all(pool)
-	pages_free_all(pool)
+	inline_paged_array_reset(&pool.indices)
 	pool.parts_size = 0
 }
 
@@ -98,12 +100,10 @@ part_pool_get_part_unchecked :: proc(pool: ^Part_Pool, thing: Thing) -> rawptr {
 part_pool_insert :: proc(pool: ^Part_Pool, thing: Thing, part: rawptr = nil) -> rawptr {
 	assert(thing != THING_NIL, "Cannot insert a part for THING_NIL.")
 
-	page := pool.indices[page_idx(thing.idx)]
-	if page == nil || page[page_offset(thing.idx)] == 0 {
-		return part_pool_insert_unchecked(pool, thing, part)
-	}
+	entry := inline_paged_array_get(&pool.indices, int(thing.idx))
+	if entry == 0 do return part_pool_insert_unchecked(pool, thing, part)
 
-	idx := int(page[page_offset(thing.idx)] - 1)
+	idx := int(entry - 1)
 	pool.things[idx] = thing
 
 	result := parts_get_unchecked(pool, idx)
@@ -119,13 +119,11 @@ part_pool_insert_unchecked :: proc(pool: ^Part_Pool, thing: Thing, part: rawptr 
 	assert(thing != THING_NIL, "Cannot insert a part for THING_NIL.")
 	assert(pool.parts_size < PART_POOL_MAX_CAPACITY, "Part pool is full.")
 
-	page := ensure_page(pool, page_idx(thing.idx))
-
 	idx := pool.parts_size
 	result := parts_append(pool, part)
 
 	pool.things[idx] = thing
-	page[page_offset(thing.idx)] = Part_Idx(idx + 1)
+	inline_paged_array_set(&pool.indices, int(thing.idx), Part_Idx(idx + 1))
 
 	return result
 }
@@ -144,10 +142,10 @@ part_pool_remove_unchecked :: proc(pool: ^Part_Pool, thing: Thing) {
 	if idx != last_idx {
 		moved := pool.things[last_idx]
 		pool.things[idx] = moved
-		pool.indices[page_idx(moved.idx)][page_offset(moved.idx)] = Part_Idx(idx + 1)
+		inline_paged_array_set_unchecked(&pool.indices, int(moved.idx), Part_Idx(idx + 1))
 	}
 
-	pool.indices[page_idx(thing.idx)][page_offset(thing.idx)] = 0
+	inline_paged_array_set_unchecked(&pool.indices, int(thing.idx), 0)
 	parts_remove_swap(pool, idx)
 }
 
@@ -162,33 +160,8 @@ part_pool_get_things :: proc(pool: ^Part_Pool) -> []Thing {
 // >------------------------------------------------------------------ Internals
 
 @(private = "file")
-ensure_page :: proc(pool: ^Part_Pool, idx: int) -> ^Part_Pool_Page {
-	if pool.indices[idx] == nil {
-		page, err := new(Part_Pool_Page, pool.allocator)
-		if err != nil do panic("Failed to allocate memory for part pool page.")
-
-		pool.indices[idx] = page
-	}
-
-	return pool.indices[idx]
-}
-
-@(private = "file")
-page_idx :: #force_inline proc(idx: Thing_Idx) -> int {
-	return int(idx >> PART_POOL_PAGE_BITS)
-}
-
-@(private = "file")
-page_offset :: #force_inline proc(idx: Thing_Idx) -> int {
-	return int(idx & (PART_POOL_PAGE_SIZE - 1))
-}
-
-@(private = "file")
 dense_idx :: proc(pool: ^Part_Pool, thing: Thing) -> (int, bool) {
-	page := pool.indices[page_idx(thing.idx)]
-	if page == nil do return 0, false
-
-	entry := page[page_offset(thing.idx)]
+	entry := inline_paged_array_get(&pool.indices, int(thing.idx))
 	if entry == 0 do return 0, false
 
 	idx := int(entry - 1)
@@ -197,16 +170,7 @@ dense_idx :: proc(pool: ^Part_Pool, thing: Thing) -> (int, bool) {
 
 @(private = "file")
 dense_idx_unchecked :: proc(pool: ^Part_Pool, thing: Thing) -> int {
-	return int(pool.indices[page_idx(thing.idx)][page_offset(thing.idx)] - 1)
-}
-
-@(private = "file")
-pages_free_all :: proc(pool: ^Part_Pool) {
-	for page in pool.indices {
-		if page != nil do mem.free(page, pool.allocator)
-	}
-
-	pool.indices = {}
+	return int(inline_paged_array_get_unchecked(&pool.indices, int(thing.idx)) - 1)
 }
 
 @(private = "file")

@@ -5,7 +5,7 @@ Entities are things, components are parts and systems stay systems. I just like 
 ## Layout
 
 - [`ecs`](ecs/README.md) - handles, things, parts, archetypes, command buffers and the world.
-- `tests/ecs` - the test package, run with `odin test tests/ecs`.
+- `tests` - the test package, run with `odin test tests`.
 
 ## Features I aspire to build
 

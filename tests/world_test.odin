@@ -2,7 +2,7 @@ package ecs_tests
 
 import "core:testing"
 
-import ecs "../../ecs"
+import ecs "../ecs"
 
 World_Part :: enum {
 	Position,
