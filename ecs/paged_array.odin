@@ -1,6 +1,7 @@
 package ecs
 
 import "base:intrinsics"
+import "core:fmt"
 import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
@@ -58,6 +59,7 @@ inline_paged_array_has_page :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: i
 
 // Returns nil when the page is not allocated.
 inline_paged_array_get_page :: proc(arr: ^Inline_Paged_Array($T, $C, $S), page: int) -> []T {
+	check_page(page, C)
 	return page_slice(arr.pages[page], S)
 }
 
@@ -112,10 +114,11 @@ paged_array_init :: proc(
 	page_size: int,
 	allocator: mem.Allocator = context.allocator,
 ) {
-	assert(page_count > 0, "Paged array needs at least one page.")
-	assert(
+	fmt.assertf(page_count > 0, "Paged array needs at least one page, got %v.", page_count)
+	fmt.assertf(
 		page_size > 0 && page_size & (page_size - 1) == 0,
-		"Paged array page size has to be a power of two.",
+		"Paged array page size has to be a power of two, got %v.",
+		page_size,
 	)
 
 	pages, err := make([][^]T, page_count, allocator)
@@ -155,6 +158,7 @@ paged_array_has_page :: proc(arr: ^Paged_Array($T), idx: int) -> bool {
 
 // Returns nil when the page is not allocated.
 paged_array_get_page :: proc(arr: ^Paged_Array($T), page: int) -> []T {
+	check_page(page, len(arr.pages))
 	return page_slice(arr.pages[page], arr.page_size)
 }
 
@@ -208,11 +212,26 @@ locate :: #force_inline proc(
 	page: int,
 	offset: int,
 ) {
-	assert(idx >= 0 && idx < capacity, "Paged array index is out of range.")
+	fmt.assertf(
+		idx >= 0 && idx < capacity,
+		"Paged array index %v is out of range, the capacity is %v.",
+		idx,
+		capacity,
+	)
 
 	page = idx >> page_shift
 	offset = idx & ((1 << page_shift) - 1)
 	return
+}
+
+@(private = "file")
+check_page :: #force_inline proc(page: int, page_count: int) {
+	fmt.assertf(
+		page >= 0 && page < page_count,
+		"Paged array page %v is out of range, the page count is %v.",
+		page,
+		page_count,
+	)
 }
 
 @(private = "file")

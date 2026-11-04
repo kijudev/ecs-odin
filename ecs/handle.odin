@@ -65,9 +65,15 @@ handle_pool_init :: proc(
 		"Handle pool capacity has to be less or equal to HANDLE_POOL_MAX_CAPACITY.",
 	)
 
+	slots, slots_err := make([]Handle_Slot, capacity, allocator)
+	if slots_err != nil do panic("Failed to allocate memory for handle pool.")
+
+	free, free_err := make([]Handle_Idx, capacity, allocator)
+	if free_err != nil do panic("Failed to allocate memory for handle pool.")
+
 	pool^ = Handle_Pool(T) {
-		slots      = make([]Handle_Slot, capacity, allocator),
-		free       = make([]Handle_Idx, capacity, allocator),
+		slots      = slots,
+		free       = free,
 		slots_next = 1,
 		free_count = 0,
 		allocator  = allocator,
@@ -99,6 +105,7 @@ handle_pool_count_free :: proc(pool: Handle_Pool($T)) -> int {
 	return pool.free_count
 }
 
+// Returns a nil handle when the pool is full.
 handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 	if (pool.free_count > 0) {
 		idx := pool.free[pool.free_count - 1]
@@ -110,7 +117,7 @@ handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 
 		return handle_make(T, idx, slot.gen)
 	} else {
-		assert(pool.slots_next < handle_pool_capacity(pool^), "Handle pool is full.")
+		if pool.slots_next >= handle_pool_capacity(pool^) do return Handle(T){}
 
 		idx := pool.slots_next
 		pool.slots[idx] = Handle_Slot {

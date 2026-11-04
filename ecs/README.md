@@ -1,3 +1,15 @@
+# Errors
+
+There are only three cases:
+
+- **You used it wrong** (an unregistered kind, a mismatched type, an index out of range):
+  `assert`. These go away with `-disable-assert`.
+- **Something just isn't there** (a dead thing, a missing part): you get `false` or `nil` back.
+  When the thing pool is full, `spawn` returns `THING_NIL`. The world treats it as dead, so a
+  failed spawn is harmless there. The lower-level pools assert on it instead.
+- **Out of memory**: `panic`. No proc returns an allocator error. If that matters, size the pools
+  up front or pass an allocator that can't fail.
+
 # Handles
 
 `Handle($T)` is an opaque, typed handle. It wraps a `u32` bit field with two parts: 20-bit `idx`

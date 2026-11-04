@@ -30,7 +30,7 @@ Part_Pool :: struct {
 }
 
 @(private = "file")
-zero_sized_part: u8
+Part_Zero_Sized: u8
 
 // >------------------------------------------------------------------ Part_Pool
 
@@ -238,7 +238,7 @@ parts_write :: proc(pool: ^Part_Pool, dst: rawptr, src: rawptr) {
 
 @(private = "file")
 parts_get_unchecked :: proc(pool: ^Part_Pool, idx: int) -> rawptr {
-	if pool.part_size == 0 do return &zero_sized_part
+	if pool.part_size == 0 do return &Part_Zero_Sized
 
 	offset := uintptr(idx * pool.part_size)
 	return rawptr(uintptr(raw_data(pool.parts_data)) + offset)

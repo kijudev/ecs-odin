@@ -1,6 +1,7 @@
 package ecs
 
 import "base:intrinsics"
+import "core:fmt"
 import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
@@ -25,18 +26,19 @@ archetype_pool_init :: proc(
 	capacity: int = ARCHETYPE_POOL_DEFAULT_CAPACITY,
 	allocator: mem.Allocator = context.allocator,
 ) {
-	assert(
-		capacity >= ARCHETYPE_POOL_MIN_CAPACITY,
-		"Archetype pool capacity has to be greater or equal to ARCHETYPE_POOL_MIN_CAPACITY.",
+	fmt.assertf(
+		capacity >= ARCHETYPE_POOL_MIN_CAPACITY && capacity <= ARCHETYPE_POOL_MAX_CAPACITY,
+		"Archetype pool capacity has to be between %v and %v, got %v.",
+		ARCHETYPE_POOL_MIN_CAPACITY,
+		ARCHETYPE_POOL_MAX_CAPACITY,
+		capacity,
 	)
 
-	assert(
-		capacity <= ARCHETYPE_POOL_MAX_CAPACITY,
-		"Archetype pool capacity has to be less or equal to ARCHETYPE_POOL_MAX_CAPACITY.",
-	)
+	slots, err := make([]Archetype(P), capacity, allocator)
+	if err != nil do panic("Failed to allocate memory for archetype pool.")
 
 	pool^ = Archetype_Pool(P) {
-		slots     = make([]Archetype(P), capacity, allocator),
+		slots     = slots,
 		allocator = allocator,
 	}
 }
@@ -55,21 +57,38 @@ archetype_pool_capacity :: proc(pool: Archetype_Pool($P)) -> int {
 }
 
 archetype_pool_has :: proc(pool: Archetype_Pool($P), thing: Thing, kind: P) -> bool {
+	check_thing(thing, len(pool.slots))
 	return kind in pool.slots[thing.idx].mask
 }
 
 archetype_pool_insert :: proc(pool: ^Archetype_Pool($P), thing: Thing, kind: P) {
+	check_thing(thing, len(pool.slots))
 	pool.slots[thing.idx].mask += {kind}
 }
 
 archetype_pool_remove :: proc(pool: ^Archetype_Pool($P), thing: Thing, kind: P) {
+	check_thing(thing, len(pool.slots))
 	pool.slots[thing.idx].mask -= {kind}
 }
 
 archetype_pool_remove_all :: proc(pool: ^Archetype_Pool($P), thing: Thing) {
+	check_thing(thing, len(pool.slots))
 	pool.slots[thing.idx].mask = {}
 }
 
 archetype_pool_get_mask :: proc(pool: Archetype_Pool($P), thing: Thing) -> bit_set[P] {
+	check_thing(thing, len(pool.slots))
 	return pool.slots[thing.idx].mask
+}
+
+// >------------------------------------------------------------------ Internals
+
+@(private = "file")
+check_thing :: #force_inline proc(thing: Thing, capacity: int) {
+	fmt.assertf(
+		int(thing.idx) < capacity,
+		"Thing idx %v is out of range of the archetype pool, the capacity is %v.",
+		thing.idx,
+		capacity,
+	)
 }

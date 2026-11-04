@@ -63,9 +63,15 @@ cmd_pool_init :: proc(
 		"Command pool parts capacity has to be less or equal to CMD_POOL_MAX_PARTS_SIZE.",
 	)
 
+	commands, commands_err := make([dynamic]Cmd(P), 0, capacity, allocator)
+	if commands_err != nil do panic("Failed to allocate memory for command pool.")
+
+	parts, parts_err := make([dynamic]byte, 0, parts_capacity, allocator)
+	if parts_err != nil do panic("Failed to allocate memory for command pool.")
+
 	pool^ = Cmd_Pool(P) {
-		commands  = make([dynamic]Cmd(P), 0, capacity, allocator),
-		parts     = make([dynamic]byte, 0, parts_capacity, allocator),
+		commands  = commands,
+		parts     = parts,
 		allocator = allocator,
 	}
 }
@@ -95,7 +101,7 @@ cmd_pool_get_cmds :: proc(pool: ^Cmd_Pool($P)) -> []Cmd(P) {
 
 cmd_pool_record_kill :: proc(pool: ^Cmd_Pool($P), thing: Thing) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
-	append(&pool.commands, Cmd_Kill{thing = thing})
+	record(pool, Cmd_Kill{thing = thing})
 }
 
 cmd_pool_record_set_value :: proc(
@@ -109,16 +115,17 @@ cmd_pool_record_set_value :: proc(
 	assert(size >= 0, "Part size cannot be negative.")
 	assert(size <= CMD_PART_MAX_SIZE, "Part size has to be less or equal to CMD_PART_MAX_SIZE.")
 	assert(part != nil || size == 0, "Cannot record a nil part, use cmd_pool_record_set_zero.")
-	assert(
-		len(pool.parts) + size <= CMD_POOL_MAX_PARTS_SIZE,
-		"Command pool parts size would exceed CMD_POOL_MAX_PARTS_SIZE.",
-	)
+	if len(pool.parts) + size > CMD_POOL_MAX_PARTS_SIZE {
+		panic("Command pool parts size would exceed CMD_POOL_MAX_PARTS_SIZE.")
+	}
 
 	offset := len(pool.parts)
-	if size > 0 do append(&pool.parts, ..mem.byte_slice(part, size))
+	if size > 0 {
+		if _, err := append(&pool.parts, ..mem.byte_slice(part, size)); err != nil do panic("Failed to allocate memory for command pool.")
+	}
 
-	append(
-		&pool.commands,
+	record(
+		pool,
 		Cmd_Set_Value(P) {
 			thing = thing,
 			kind = kind,
@@ -130,12 +137,12 @@ cmd_pool_record_set_value :: proc(
 
 cmd_pool_record_set_zero :: proc(pool: ^Cmd_Pool($P), thing: Thing, kind: P) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
-	append(&pool.commands, Cmd_Set_Zero(P){thing = thing, kind = kind})
+	record(pool, Cmd_Set_Zero(P){thing = thing, kind = kind})
 }
 
 cmd_pool_record_remove :: proc(pool: ^Cmd_Pool($P), thing: Thing, kind: P) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
-	append(&pool.commands, Cmd_Remove(P){thing = thing, kind = kind})
+	record(pool, Cmd_Remove(P){thing = thing, kind = kind})
 }
 
 cmd_pool_get_bytes :: proc(pool: ^Cmd_Pool($P), offset: Cmd_Offset, size: Cmd_Size) -> []byte {
@@ -153,5 +160,14 @@ cmd_pool_get_part :: proc(pool: ^Cmd_Pool($P), offset: Cmd_Offset, $T: typeid) -
 	} else {
 		bytes := cmd_pool_get_bytes(pool, offset, Cmd_Size(size_of(T)))
 		return intrinsics.unaligned_load((^T)(raw_data(bytes)))
+	}
+}
+
+// >------------------------------------------------------------------ Internals
+
+@(private = "file")
+record :: proc(pool: ^Cmd_Pool($P), cmd: Cmd(P)) {
+	if _, err := append(&pool.commands, cmd); err != nil {
+		panic("Failed to allocate memory for command pool.")
 	}
 }

@@ -129,6 +129,26 @@ thing_pool_spawn_fills_pool_to_capacity :: proc(t: ^testing.T) {
 	testing.expect_value(t, ecs.thing_pool_count_alive(pool), usable)
 }
 
+@(test)
+thing_pool_spawn_returns_nil_when_full :: proc(t: ^testing.T) {
+	pool: ecs.Thing_Pool
+	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
+	defer ecs.thing_pool_destroy(&pool)
+
+	usable := ecs.thing_pool_capacity(pool) - 1
+	last: ecs.Thing
+	for _ in 0 ..< usable {
+		last = ecs.thing_pool_spawn(&pool)
+	}
+
+	testing.expect_value(t, ecs.thing_pool_spawn(&pool), ecs.THING_NIL)
+	testing.expect_value(t, ecs.thing_pool_count_alive(pool), usable)
+
+	// Killing frees a slot again.
+	ecs.thing_pool_kill(&pool, last)
+	testing.expect(t, ecs.thing_pool_spawn(&pool) != ecs.THING_NIL)
+}
+
 // >----------------------------------------------------------------------- Kill
 
 @(test)

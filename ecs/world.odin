@@ -150,6 +150,7 @@ set_value_now :: proc(
 }
 
 set_pointer_now :: proc(world: ^World($P), thing: Thing, kind: P, part: ^$T) -> ^T {
+	assert(kind in world.part_registered, "Part kind is not registered in the world.")
 	assert(world.part_types[kind] == T, "Part kind does not match the provided type.")
 	return cast(^T)set_raw(world, thing, kind, part)
 }
