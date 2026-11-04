@@ -49,10 +49,12 @@ capacity. See [Handles](#handles) for the pool design.
 
 # Parts
 
-`Part_Pool` stores one part type as a paged sparse set. It is type-erased: it only knows the part's
+## Part Set
+
+`Part_Set` stores one part type as a paged sparse set. It is type-erased: it only knows the part's
 size and alignment (from `^runtime.Type_Info`) and an optional `destroy_part` callback.
 
-- `indices` - an `Inline_Paged_Array` with `PART_POOL_PAGE_COUNT` pages mapping a thing idx to
+- `indices` - an `Inline_Paged_Array` with `PART_SET_PAGE_COUNT` pages mapping a thing idx to
   dense idx + 1. `0` means no part, so a missing or freshly zeroed page is empty.
 - `things` / `parts_data` - dense arrays of owners and part bytes, grown by doubling. Removal swaps the
   last part into the hole and updates its sparse entry, so parts stay packed for iteration.
@@ -64,6 +66,21 @@ on the old value). Inserting with a nil part zero-initialises it. Zero-sized par
 
 The `_unchecked` variants skip validation: `get_part`/`remove` assume the part exists, `insert` assumes it
 does not.
+
+## Part Pool
+
+`Part_Pool($P)` is one `Part_Set` per kind of `P`, plus the type each kind was registered with. It
+only cares about parts: it doesn't know if a thing is alive or which kinds it has, that is up to
+whoever uses it.
+
+Every call asserts that the kind is registered, and the typed ones that the type matches. The
+`_unchecked` variants keep these asserts and only skip the runtime checks, the same way as in
+`Part_Set`. The asserts are also available on their own as `part_pool_assert_registered` and
+`part_pool_assert_type`, and vanish entirely with `-disable-assert`.
+
+Parts are set with `set_value`, `set_pointer` (`nil` zeroes the part) or the untyped `set_raw`.
+There are no proc groups. `remove_all` tries every registered kind; if you already know which
+kinds a thing has, `remove_unchecked` on those is faster.
 
 # Commands
 
@@ -78,7 +95,7 @@ packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buf
 
 # World
 
-`World($P)` owns a `Thing_Pool`, one `Part_Pool` per registered kind of `P`, an
+`World($P)` owns a `Thing_Pool`, a `Part_Pool(P)`, an
 `Archetype_Pool(P)` and a `Cmd_Pool(P)`.
 
 Mutations come in two flavours:

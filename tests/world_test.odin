@@ -1,5 +1,6 @@
 package ecs_tests
 
+import "core:mem"
 import "core:testing"
 
 import ecs "../ecs"
@@ -33,6 +34,34 @@ init_creates_empty_world :: proc(t: ^testing.T) {
 	testing.expect_value(t, ecs.count_alive(&world), 0)
 	testing.expect(t, ecs.is_registered(&world, .Position))
 	testing.expect_value(t, ecs.count_parts(&world, .Position), 0)
+}
+
+@(test)
+every_pool_allocates_with_pool_allocator :: proc(t: ^testing.T) {
+	track: mem.Tracking_Allocator
+	mem.tracking_allocator_init(&track, context.allocator)
+	defer mem.tracking_allocator_destroy(&track)
+
+	// Anything that bypasses the pool allocator panics.
+	context.allocator = mem.panic_allocator()
+
+	world: World
+	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, mem.tracking_allocator(&track))
+	ecs.register(&world, .Position, Position)
+	ecs.register(&world, .Velocity, Velocity)
+
+	// Grow the part sets, their pages and the command buffer past their first allocation.
+	for _ in 0 ..< 32 {
+		thing := ecs.spawn(&world)
+		ecs.set_now(&world, thing, .Position, Position{1, 2})
+		ecs.set_later(&world, thing, .Velocity, Velocity{3, 4})
+	}
+	ecs.apply_self(&world)
+	testing.expect_value(t, ecs.count_parts(&world, .Velocity), 32)
+
+	ecs.world_destroy(&world)
+	testing.expect_value(t, len(track.allocation_map), 0)
+	testing.expect_value(t, len(track.bad_free_array), 0)
 }
 
 @(test)
@@ -592,4 +621,26 @@ apply_other_leaves_own_cmds_pending :: proc(t: ^testing.T) {
 	testing.expect(t, ecs.has(&world, thing, .Position))
 	testing.expect(t, !ecs.has(&world, thing, .Tag))
 	testing.expect_value(t, ecs.count_cmds(&world), 1)
+}
+
+// >-------------------------------------------------------------------- Asserts
+
+@(test)
+set_later_wrong_type_asserts_when_recording :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
+	backing: [1 << 16]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	world: World
+	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, mem.arena_allocator(&arena))
+	ecs.register(&world, .Target, Position)
+	thing := ecs.spawn(&world)
+
+	testing.expect_assert_message(t, "Part kind Target is a Position, not a Velocity.")
+	ecs.set_later(&world, thing, .Target, Velocity{1, 2})
+	testing.fail_now(t, "The call did not assert.")
 }

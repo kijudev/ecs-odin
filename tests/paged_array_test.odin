@@ -413,3 +413,61 @@ paged_array_reset_keeps_page_slices_valid :: proc(t: ^testing.T) {
 		testing.expect_value(t, value, 0)
 	}
 }
+
+// >-------------------------------------------------------------------- Asserts
+
+@(test)
+inline_paged_array_index_out_of_range_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	arr: Small_Array
+	ecs.inline_paged_array_init(&arr)
+
+	testing.expect_assert_message(t, "Paged array index 32 is out of range, the capacity is 32.")
+	ecs.inline_paged_array_get(&arr, 32)
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+inline_paged_array_page_out_of_range_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	arr: Small_Array
+	ecs.inline_paged_array_init(&arr)
+
+	testing.expect_assert_message(t, "Paged array page 4 is out of range, the page count is 4.")
+	ecs.inline_paged_array_get_page(&arr, 4)
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+paged_array_page_out_of_range_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	// The assert skips any cleanup, so take the page table from the stack instead of the heap.
+	backing: [256]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	arr: ecs.Paged_Array(u32)
+	ecs.paged_array_init(&arr, 4, 8, mem.arena_allocator(&arena))
+
+	testing.expect_assert_message(t, "Paged array page -1 is out of range, the page count is 4.")
+	ecs.paged_array_get_page(&arr, -1)
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+paged_array_page_size_not_power_of_two_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	arr: ecs.Paged_Array(u32)
+
+	testing.expect_assert_message(t, "Paged array page size has to be a power of two, got 6.")
+	ecs.paged_array_init(&arr, 4, 6)
+	testing.fail_now(t, "The call did not assert.")
+}

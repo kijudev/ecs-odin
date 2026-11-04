@@ -7,13 +7,11 @@ import "core:mem"
 // >-------------------------------------------------------- Constants and Types
 
 World :: struct($P: typeid) where intrinsics.type_is_enum(P) {
-	thing_pool:      Thing_Pool,
-	archetype_pool:  Archetype_Pool(P),
-	cmd_pool:        Cmd_Pool(P),
-	part_pools:      [P]Part_Pool,
-	part_types:      [P]typeid,
-	part_registered: bit_set[P],
-	pool_allocator:  mem.Allocator,
+	thing_pool:     Thing_Pool,
+	archetype_pool: Archetype_Pool(P),
+	cmd_pool:       Cmd_Pool(P),
+	part_pool:      Part_Pool(P),
+	pool_allocator: mem.Allocator,
 }
 
 // >---------------------------------------------------------------- World Setup
@@ -23,22 +21,20 @@ world_init :: proc(
 	capacity := THING_POOL_DEFAULT_CAPACITY,
 	pool_allocator := context.allocator,
 ) {
-	thing_pool_init(&world.thing_pool, capacity, pool_allocator)
-	archetype_pool_init(&world.archetype_pool, capacity, pool_allocator)
-	cmd_pool_init(&world.cmd_pool, allocator = pool_allocator)
-	world.part_types = {}
-	world.part_registered = {}
+	// One general purpose allocator for every pool of the world.
 	world.pool_allocator = pool_allocator
+
+	thing_pool_init(&world.thing_pool, capacity, world.pool_allocator)
+	archetype_pool_init(&world.archetype_pool, capacity, world.pool_allocator)
+	cmd_pool_init(&world.cmd_pool, allocator = world.pool_allocator)
+	part_pool_init(&world.part_pool, world.pool_allocator)
 }
 
 world_destroy :: proc(world: ^World($P)) {
 	thing_pool_destroy(&world.thing_pool)
 	archetype_pool_destroy(&world.archetype_pool)
 	cmd_pool_destroy(&world.cmd_pool)
-
-	for kind in world.part_registered {
-		part_pool_destroy(&world.part_pools[kind])
-	}
+	part_pool_destroy(&world.part_pool)
 
 	world^ = World(P){}
 }
@@ -48,23 +44,15 @@ world_reset :: proc(world: ^World($P)) {
 	thing_pool_reset(&world.thing_pool)
 	archetype_pool_reset(&world.archetype_pool)
 	cmd_pool_reset(&world.cmd_pool)
-
-	for kind in world.part_registered {
-		part_pool_reset(&world.part_pools[kind])
-	}
+	part_pool_reset(&world.part_pool)
 }
 
 register :: proc(world: ^World($P), kind: P, $T: typeid, destroy: proc(part: rawptr) = nil) {
-	assert(kind not_in world.part_registered, "Part kind is already registered in the world.")
-
-	world.part_types[kind] = T
-	world.part_registered += {kind}
-
-	part_pool_init(&world.part_pools[kind], type_info_of(T), destroy, world.pool_allocator)
+	part_pool_register(&world.part_pool, kind, T, destroy)
 }
 
 is_registered :: proc(world: ^World($P), kind: P) -> bool {
-	return kind in world.part_registered
+	return part_pool_is_registered(&world.part_pool, kind)
 }
 
 // >--------------------------------------------------------------- World Things
@@ -77,7 +65,7 @@ kill_now :: proc(world: ^World($P), thing: Thing) -> bool {
 	if !thing_pool_poke(world.thing_pool, thing) do return false
 
 	for kind in archetype_pool_get_mask(world.archetype_pool, thing) {
-		part_pool_remove_unchecked(&world.part_pools[kind], thing)
+		part_pool_remove_unchecked(&world.part_pool, thing, kind)
 	}
 
 	archetype_pool_remove_all(&world.archetype_pool, thing)
@@ -100,34 +88,23 @@ count_free :: proc(world: ^World($P)) -> int {
 // >---------------------------------------------------------------- World Parts
 
 has :: proc(world: ^World($P), thing: Thing, kind: P) -> bool {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
-	return part_pool_has(&world.part_pools[kind], thing)
+	return part_pool_has(&world.part_pool, thing, kind)
 }
 
 get_part :: proc(world: ^World($P), thing: Thing, kind: P, $T: typeid) -> ^T {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
-	assert(world.part_types[kind] == T, "Part kind does not match the provided type.")
-
-	raw := part_pool_get_part(&world.part_pools[kind], thing)
-	return cast(^T)raw
+	return part_pool_get(&world.part_pool, thing, kind, T)
 }
 
 get_parts :: proc(world: ^World($P), kind: P, $T: typeid) -> []T {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
-	assert(world.part_types[kind] == T, "Part kind does not match the provided type.")
-
-	pool := &world.part_pools[kind]
-	return ([^]T)(raw_data(pool.parts_data))[:part_pool_count_parts(pool)]
+	return part_pool_get_parts(&world.part_pool, kind, T)
 }
 
 get_things :: proc(world: ^World($P), kind: P) -> []Thing {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
-	return part_pool_get_things(&world.part_pools[kind])
+	return part_pool_get_things(&world.part_pool, kind)
 }
 
 count_parts :: proc(world: ^World($P), kind: P) -> int {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
-	return part_pool_count_parts(&world.part_pools[kind])
+	return part_pool_count_parts(&world.part_pool, kind)
 }
 
 set_now :: proc {
@@ -150,8 +127,7 @@ set_value_now :: proc(
 }
 
 set_pointer_now :: proc(world: ^World($P), thing: Thing, kind: P, part: ^$T) -> ^T {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
-	assert(world.part_types[kind] == T, "Part kind does not match the provided type.")
+	part_pool_assert_type(&world.part_pool, kind, T)
 	return cast(^T)set_raw(world, thing, kind, part)
 }
 
@@ -164,9 +140,7 @@ add_now :: proc(world: ^World($P), thing: Thing, kind: P) -> bool {
 }
 
 remove_now :: proc(world: ^World($P), thing: Thing, kind: P) -> bool {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
-
-	if !part_pool_remove(&world.part_pools[kind], thing) do return false
+	if !part_pool_remove(&world.part_pool, thing, kind) do return false
 
 	archetype_pool_remove(&world.archetype_pool, thing, kind)
 	return true
@@ -199,8 +173,7 @@ set_value_later :: proc(
 }
 
 set_pointer_later :: proc(world: ^World($P), thing: Thing, kind: P, part: ^$T) {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
-	assert(world.part_types[kind] == T, "Part kind does not match the provided type.")
+	part_pool_assert_type(&world.part_pool, kind, T)
 	if thing == THING_NIL do return
 
 	if part == nil {
@@ -215,14 +188,14 @@ set_zero_later :: proc(world: ^World($P), thing: Thing, kind: P, $T: typeid) {
 }
 
 add_later :: proc(world: ^World($P), thing: Thing, kind: P) {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
+	part_pool_assert_registered(&world.part_pool, kind)
 	if thing == THING_NIL do return
 
 	cmd_pool_record_set_zero(&world.cmd_pool, thing, kind)
 }
 
 remove_later :: proc(world: ^World($P), thing: Thing, kind: P) {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
+	part_pool_assert_registered(&world.part_pool, kind)
 	if thing == THING_NIL do return
 
 	cmd_pool_record_remove(&world.cmd_pool, thing, kind)
@@ -246,10 +219,10 @@ apply_other :: proc(world: ^World($P), cmds: ^Cmd_Pool(P)) {
 
 @(private = "file")
 set_raw :: proc(world: ^World($P), thing: Thing, kind: P, part: rawptr) -> rawptr {
-	assert(kind in world.part_registered, "Part kind is not registered in the world.")
+	part_pool_assert_registered(&world.part_pool, kind)
 	if !thing_pool_poke(world.thing_pool, thing) do return nil
 
-	result := part_pool_insert(&world.part_pools[kind], thing, part)
+	result := part_pool_set_raw(&world.part_pool, thing, kind, part)
 	archetype_pool_insert(&world.archetype_pool, thing, kind)
 
 	return result
@@ -263,9 +236,9 @@ apply_cmds :: proc(world: ^World($P), cmds: ^Cmd_Pool(P)) {
 			kill_now(world, c.thing)
 
 		case Cmd_Set_Value(P):
-			assert(c.kind in world.part_registered, "Part kind is not registered in the world.")
+			part_pool_assert_registered(&world.part_pool, c.kind)
 			assert(
-				int(c.size) == world.part_pools[c.kind].part_size,
+				int(c.size) == world.part_pool.sets[c.kind].part_size,
 				"Command part size does not match the registered part type.",
 			)
 

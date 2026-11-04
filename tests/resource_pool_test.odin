@@ -186,10 +186,14 @@ resource_pool_register_panics_when_out_of_memory :: proc(t: ^testing.T) {
 		"Resource pool is out of memory: Time needs 16 bytes, the capacity is 4. Consider increasing the capacity.",
 	)
 	ecs.resource_pool_register(&pool, .Time, Time)
+	testing.fail_now(t, "The call did not assert.")
 }
 
 @(test)
 resource_pool_register_twice_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
 	backing: [64]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
@@ -200,10 +204,14 @@ resource_pool_register_twice_asserts :: proc(t: ^testing.T) {
 
 	testing.expect_assert_message(t, "Resource Gravity is already registered in the pool.")
 	ecs.resource_pool_register(&pool, .Gravity, f32)
+	testing.fail_now(t, "The call did not assert.")
 }
 
 @(test)
 resource_pool_get_wrong_type_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
 	backing: [64]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
@@ -214,10 +222,14 @@ resource_pool_get_wrong_type_asserts :: proc(t: ^testing.T) {
 
 	testing.expect_assert_message(t, "Resource Gravity is a f32, not a f64.")
 	ecs.resource_pool_get(&pool, .Gravity, f64)
+	testing.fail_now(t, "The call did not assert.")
 }
 
 @(test)
 resource_pool_get_unregistered_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
 	backing: [64]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
@@ -227,4 +239,5 @@ resource_pool_get_unregistered_asserts :: proc(t: ^testing.T) {
 
 	testing.expect_assert_message(t, "Resource Time is not registered in the pool.")
 	ecs.resource_pool_get(&pool, .Time, Time)
+	testing.fail_now(t, "The call did not assert.")
 }
