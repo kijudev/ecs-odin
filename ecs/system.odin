@@ -79,6 +79,7 @@ system_pool_register :: proc(
 		stage  = stage,
 		system = system,
 	}
+
 	pool.systems_size += 1
 }
 
