@@ -5,20 +5,12 @@ import "core:testing"
 
 import ecs "../ecs"
 
-Pool_Part :: enum {
-	Position,
-	Velocity,
-	Tag,
-	Target, // shares the Position type
-}
-
-Part_Pool :: ecs.Part_Pool(Pool_Part)
-
 @(private = "file")
 make_pool :: proc(pool: ^Part_Pool, allocator := context.allocator) {
 	ecs.part_pool_init(pool, allocator)
 	ecs.part_pool_register(pool, .Position, Position, count_destroyed)
 	ecs.part_pool_register(pool, .Velocity, Velocity)
+	ecs.part_pool_register(pool, .Health, Health)
 	ecs.part_pool_register(pool, .Tag, Tag)
 	ecs.part_pool_register(pool, .Target, Position)
 }
@@ -31,7 +23,7 @@ part_pool_init_creates_empty_pool :: proc(t: ^testing.T) {
 	ecs.part_pool_init(&pool)
 	defer ecs.part_pool_destroy(&pool)
 
-	for kind in Pool_Part {
+	for kind in Part {
 		testing.expect(t, !ecs.part_pool_is_registered(&pool, kind))
 	}
 }
@@ -42,7 +34,7 @@ part_pool_register_creates_empty_sets :: proc(t: ^testing.T) {
 	make_pool(&pool)
 	defer ecs.part_pool_destroy(&pool)
 
-	for kind in Pool_Part {
+	for kind in Part {
 		testing.expect(t, ecs.part_pool_is_registered(&pool, kind))
 		testing.expect_value(t, ecs.part_pool_count_parts(&pool, kind), 0)
 	}
@@ -84,7 +76,7 @@ part_pool_reset_removes_parts_keeps_registrations :: proc(t: ^testing.T) {
 	ecs.part_pool_reset(&pool)
 
 	testing.expect_value(t, destroyed_count, 1)
-	for kind in Pool_Part {
+	for kind in Part {
 		testing.expect(t, ecs.part_pool_is_registered(&pool, kind))
 		testing.expect_value(t, ecs.part_pool_count_parts(&pool, kind), 0)
 	}
@@ -280,7 +272,7 @@ part_pool_remove_all_removes_every_kind :: proc(t: ^testing.T) {
 
 	ecs.part_pool_remove_all(&pool, a)
 
-	for kind in Pool_Part {
+	for kind in Part {
 		testing.expect(t, !ecs.part_pool_has(&pool, a, kind))
 	}
 	testing.expect_value(t, ecs.part_pool_get(&pool, b, .Position, Position)^, Position{5, 6})

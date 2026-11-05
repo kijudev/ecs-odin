@@ -5,30 +5,6 @@ import "core:testing"
 
 import ecs "../ecs"
 
-Resource :: enum {
-	Time,
-	Gravity,
-	Flag,
-	Big,
-	Marker,
-}
-
-Time :: struct {
-	delta:   f32,
-	elapsed: f64,
-}
-
-@(thread_local)
-destroyed_resources: [Resource]int
-
-count_destroyed_time :: proc(resource: rawptr) {
-	destroyed_resources[.Time] += 1
-}
-
-count_destroyed_gravity :: proc(resource: rawptr) {
-	destroyed_resources[.Gravity] += 1
-}
-
 // >------------------------------------------------------------------ Lifecycle
 
 @(test)

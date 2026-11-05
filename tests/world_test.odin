@@ -5,20 +5,6 @@ import "core:testing"
 
 import ecs "../ecs"
 
-World_Part :: enum {
-	Position,
-	Velocity,
-	Tag,
-	Target, // shares the Position type
-}
-
-World_Resource :: enum {
-	Time,
-	Gravity,
-}
-
-World :: ecs.World(World_Part, World_Resource)
-
 @(private = "file")
 make_world :: proc(world: ^World) {
 	ecs.world_init(world, ecs.THING_POOL_MIN_CAPACITY)
@@ -538,7 +524,7 @@ apply_other_applies_and_keeps_buffer :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
-	cmds: ecs.Cmd_Pool(World_Part)
+	cmds: Cmd_Pool
 	ecs.cmd_pool_init(&cmds)
 	defer ecs.cmd_pool_destroy(&cmds)
 
@@ -567,7 +553,7 @@ apply_other_replays_into_many_worlds :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&first)
 	make_world(&second)
 	defer ecs.world_destroy(&second)
-	cmds: ecs.Cmd_Pool(World_Part)
+	cmds: Cmd_Pool
 	ecs.cmd_pool_init(&cmds)
 	defer ecs.cmd_pool_destroy(&cmds)
 
@@ -590,7 +576,7 @@ apply_other_leaves_own_cmds_pending :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
-	cmds: ecs.Cmd_Pool(World_Part)
+	cmds: Cmd_Pool
 	ecs.cmd_pool_init(&cmds)
 	defer ecs.cmd_pool_destroy(&cmds)
 

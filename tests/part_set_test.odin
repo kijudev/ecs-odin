@@ -4,23 +4,6 @@ import "core:testing"
 
 import ecs "../ecs"
 
-Position :: struct {
-	x, y: f32,
-}
-
-Tag :: struct {}
-
-Aligned :: struct #align (64) {
-	value: int,
-}
-
-@(thread_local)
-destroyed_count: int
-
-count_destroyed :: proc(part: rawptr) {
-	destroyed_count += 1
-}
-
 // >------------------------------------------------------------------ Lifecycle
 
 @(test)

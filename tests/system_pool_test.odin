@@ -5,46 +5,7 @@ import "core:testing"
 
 import ecs "../ecs"
 
-System_Part :: enum {
-	Position,
-	Velocity,
-	Health,
-}
-
-System_Resource :: enum {
-	Time,
-}
-
-Stage :: enum {
-	Update,
-	Render,
-}
-
-System_Pool :: ecs.System_Pool(System_Part, System_Resource, Stage)
-System_Info :: ecs.System_Info(System_Part, System_Resource, Stage)
-System_Stuff :: ecs.Stuff(System_Part, System_Resource, Stage)
-
-// Every system appends its id here, so tests can check what ran and in which order.
-@(thread_local)
-system_log: [dynamic; 64]int
-
-system_a :: proc(stuff: ^System_Stuff) {append(&system_log, 0)}
-system_b :: proc(stuff: ^System_Stuff) {append(&system_log, 1)}
-system_c :: proc(stuff: ^System_Stuff) {append(&system_log, 2)}
-system_d :: proc(stuff: ^System_Stuff) {append(&system_log, 3)}
-
-// Position of a system id in the log, or -1 if it never ran.
-system_log_index :: proc(id: int) -> int {
-	for logged, i in system_log do if logged == id do return i
-	return -1
-}
-
-system_log_count :: proc(id: int) -> int {
-	count := 0
-	for logged in system_log do if logged == id do count += 1
-	return count
-}
-
+@(private = "file")
 system_graph_edge :: proc(graph: ^ecs.System_Graph, from, to: int) -> bool {
 	return graph.adj_matrix[from * ecs.SYSTEM_POOL_SIZE + to]
 }
@@ -53,19 +14,19 @@ system_graph_edge :: proc(graph: ^ecs.System_Graph, from, to: int) -> bool {
 
 @(test)
 system_info_conflicts_on_shared_writes :: proc(t: ^testing.T) {
-	reader_pos := System_Info {
+	reader_pos := System {
 		reads = {.Position},
 	}
-	reader_pos_2 := System_Info {
+	reader_pos_2 := System {
 		reads = {.Position},
 	}
-	writer_pos := System_Info {
+	writer_pos := System {
 		writes = {.Position},
 	}
-	writer_pos_2 := System_Info {
+	writer_pos_2 := System {
 		writes = {.Position},
 	}
-	writer_vel := System_Info {
+	writer_vel := System {
 		writes = {.Velocity},
 	}
 
@@ -140,7 +101,7 @@ system_pool_usable_after_reset :: proc(t: ^testing.T) {
 	ecs.system_pool_build_graphs(&pool)
 
 	clear(&system_log)
-	stuff: System_Stuff
+	stuff: Stuff
 	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 1)
 	testing.expect_value(t, len(system_log), 1)
 	testing.expect_value(t, system_log_count(1), 1)
@@ -158,8 +119,8 @@ system_pool_schedule_stores_the_system :: proc(t: ^testing.T) {
 
 	systems := ecs.system_pool_get_systems(&pool, .Update)
 	testing.expect_value(t, len(systems), 1)
-	testing.expect_value(t, systems[0].reads, bit_set[System_Part]{.Velocity})
-	testing.expect_value(t, systems[0].writes, bit_set[System_Part]{.Position})
+	testing.expect_value(t, systems[0].reads, bit_set[Part]{.Velocity})
+	testing.expect_value(t, systems[0].writes, bit_set[Part]{.Position})
 	testing.expect_value(t, systems[0].stage, Stage.Update)
 	testing.expect(t, systems[0].system == system_a)
 }
@@ -280,7 +241,7 @@ system_pool_run_graph_sync_runs_each_system_once :: proc(t: ^testing.T) {
 	ecs.system_pool_build_graphs(&pool)
 
 	clear(&system_log)
-	stuff: System_Stuff
+	stuff: Stuff
 	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 3)
 
 	testing.expect_value(t, len(system_log), 3)
@@ -302,7 +263,7 @@ system_pool_run_graph_sync_respects_conflicts :: proc(t: ^testing.T) {
 	ecs.system_pool_build_graphs(&pool)
 
 	clear(&system_log)
-	stuff: System_Stuff
+	stuff: Stuff
 	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 4)
 
 	testing.expect(t, system_log_index(0) < system_log_index(1), "a before b")
@@ -321,7 +282,7 @@ system_pool_run_graph_sync_can_run_again :: proc(t: ^testing.T) {
 	ecs.system_pool_build_graphs(&pool)
 
 	clear(&system_log)
-	stuff: System_Stuff
+	stuff: Stuff
 	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 2)
 	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 2)
 
@@ -338,7 +299,7 @@ system_pool_run_graph_sync_empty_stage :: proc(t: ^testing.T) {
 
 	ecs.system_pool_build_graphs(&pool)
 
-	stuff: System_Stuff
+	stuff: Stuff
 	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 0)
 }
 
@@ -389,7 +350,7 @@ system_pool_run_graph_sync_asserts_on_stale_graph :: proc(t: ^testing.T) {
 	ecs.system_pool_build_graphs(&pool)
 	ecs.system_pool_schedule(&pool, system_b, .Update, {.Position}, {})
 
-	stuff: System_Stuff
+	stuff: Stuff
 	testing.expect_assert_message(
 		t,
 		"System graph for stage Update is stale, it was built for 1 systems but there are 2.",
