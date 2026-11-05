@@ -19,7 +19,7 @@ System_Pool :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_
 	intrinsics.type_is_enum(R),
 	intrinsics.type_is_enum(S) {
 	systems:   [S][dynamic]System_Info(P, R, S),
-	graphs:    [S]^System_Graph(P, R, S),
+	graphs:    [S]^System_Graph,
 	allocator: mem.Allocator,
 }
 
@@ -27,6 +27,7 @@ System_Graph :: struct {
 	adj_matrix:       [SYSTEM_POOL_SIZE * SYSTEM_POOL_SIZE]bool,
 	dependency_count: [SYSTEM_POOL_SIZE]int,
 	pending_count:    [SYSTEM_POOL_SIZE]int,
+	system_count:     int,
 }
 
 SYSTEM_POOL_SIZE :: 256
@@ -40,16 +41,14 @@ system_info_conflicts :: proc(a, b: ^System_Info($P, $R, $S)) -> bool {
 // >---------------------------------------------------------------- System_Pool
 
 system_pool_init :: proc(pool: ^System_Pool($P, $R, $S), allocator := context.allocator) {
-	fmt.assertf(capacity >= 0, "System pool capacity cannot be negative, got %v.", capacity)
-
 	for stage in S {
-		system, err := make([]System_Info(P, R, S), SYSTEM_POOL_SIZE, allocator)
-		if err != nil do fmt.panicf("Failed to allocate memory for system pool for stage %v.", stage)
+		systems, systems_err := make([dynamic]System_Info(P, R, S), 0, SYSTEM_POOL_SIZE, allocator)
+		if systems_err != nil do fmt.panicf("Failed to allocate memory for system pool for stage %v.", stage)
 
-		graph, err := make(^System_Graph(P, R, S), 1, allocator)
-		if err != nil do fmt.panicf("Failed to allocate memory for system graph for stage %v.", stage)
+		graph, graph_err := new(System_Graph, allocator)
+		if graph_err != nil do fmt.panicf("Failed to allocate memory for system graph for stage %v.", stage)
 
-		pool.systems[stage] = system
+		pool.systems[stage] = systems
 		pool.graphs[stage] = graph
 	}
 
@@ -58,8 +57,8 @@ system_pool_init :: proc(pool: ^System_Pool($P, $R, $S), allocator := context.al
 
 system_pool_destroy :: proc(pool: ^System_Pool($P, $R, $S)) {
 	for stage in S {
-		delete(pool.systems[stage], pool.allocator)
-		delete(pool.graphs[stage], pool.allocator)
+		delete(pool.systems[stage])
+		free(pool.graphs[stage], pool.allocator)
 	}
 
 	pool^ = System_Pool(P, R, S){}
@@ -67,19 +66,19 @@ system_pool_destroy :: proc(pool: ^System_Pool($P, $R, $S)) {
 
 system_pool_reset :: proc(pool: ^System_Pool($P, $R, $S)) {
 	for stage in S {
-		mem.zero_slice(pool.systems[stage][:])
-		pool.graphs[stage] = {}
+		clear(&pool.systems[stage])
+		system_graph_reset(pool.graphs[stage])
 	}
 }
 
-system_pool_register :: proc(
+system_pool_schedule :: proc(
 	pool: ^System_Pool($P, $R, $S),
 	system: proc(stuff: ^Stuff(P, R, S)),
 	stage: S,
 	reads: bit_set[P],
 	writes: bit_set[P],
 ) {
-	assert(system != nil, "Cannot register a nil system.")
+	assert(system != nil, "Cannot schedule a nil system.")
 
 	info := System_Info(P, R, S) {
 		system = system,
@@ -89,9 +88,10 @@ system_pool_register :: proc(
 	}
 
 	fmt.assertf(
-		pool.systems_size < SYSTEM_POOL_SIZE,
-		"Cannot register more than %v systems in the pool.",
+		len(pool.systems[stage]) < SYSTEM_POOL_SIZE,
+		"Cannot schedule more than %v systems in stage %v.",
 		SYSTEM_POOL_SIZE,
+		stage,
 	)
 
 	append(&pool.systems[stage], info)
@@ -99,7 +99,7 @@ system_pool_register :: proc(
 
 system_pool_count_systems :: proc(pool: ^System_Pool($P, $R, $S)) -> int {
 	count := 0
-	for stage in S do count += pool.systems_size[stage]
+	for stage in S do count += len(pool.systems[stage])
 	return count
 }
 
@@ -125,6 +125,14 @@ system_pool_run_graph_sync :: proc(
 	systems := pool.systems[stage][:]
 
 	n := len(systems)
+	fmt.assertf(
+		graph.system_count == n,
+		"System graph for stage %v is stale, it was built for %v systems but there are %v.",
+		stage,
+		graph.system_count,
+		n,
+	)
+
 	ran := 0
 	ready: [dynamic; SYSTEM_POOL_SIZE]int
 	for i in 0 ..< n do if graph.pending_count[i] == 0 do append(&ready, i)
@@ -141,6 +149,7 @@ system_pool_run_graph_sync :: proc(
 	}
 
 	fmt.assertf(ran == n, "Not all systems ran in stage %v. Ran %v out of %v.", stage, ran, n)
+	system_graph_refresh(graph)
 
 	return ran
 }
@@ -150,16 +159,17 @@ system_pool_run_graph_sync :: proc(
 system_graph_build :: proc(graph: ^System_Graph, systems: []System_Info($P, $R, $S)) {
 	system_graph_reset(graph)
 
-	for _, i in systems {
-		for _, j in systems {
-			if i == j do continue
-			if system_info_conflicts(systems[i], systems[j]) {
+	n := len(systems)
+	for i in 0 ..< n {
+		for j in i + 1 ..< n {
+			if system_info_conflicts(&systems[i], &systems[j]) {
 				graph.adj_matrix[i * SYSTEM_POOL_SIZE + j] = true
 				graph.dependency_count[j] += 1
 			}
 		}
 	}
 
+	graph.system_count = n
 	system_graph_refresh(graph)
 }
 
