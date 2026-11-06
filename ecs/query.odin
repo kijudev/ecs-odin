@@ -91,7 +91,7 @@ query_has :: proc(query: ^Query($K, $S), kind: K) -> bool {
 
 /* See get_part. */
 query_get_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
-	fmt.assertf(query.thing == {}, "Query has no current thing to get part %v from.", kind)
+	fmt.assertf(query.thing != {}, "Query has no current thing to get part %v from.", kind)
 
 	fmt.assertf(
 		query_has(query, kind),

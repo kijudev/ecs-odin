@@ -1,5 +1,6 @@
 package ecs_tests
 
+import "core:fmt"
 import "core:mem"
 import "core:testing"
 
@@ -242,5 +243,54 @@ query_unregistered_part_asserts :: proc(t: ^testing.T) {
 
 	testing.expect_assert_message(t, "Part kind Health is not registered.")
 	ecs.query_make(ecs.stuff_make(&world), {.Position, .Health}, {})
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+query_get_part_without_current_thing_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
+	@(static) backing: [512 * mem.Kilobyte]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	world: World
+	make_world(&world, mem.arena_allocator(&arena))
+	thing := ecs.spawn(&world)
+	ecs.set_now(&world, thing, .Position, Position{1, 2})
+
+	// Made but never advanced, so there is no current thing yet.
+	query := ecs.query_make(ecs.stuff_make(&world), {.Position}, {})
+
+	testing.expect_assert_message(t, "Query has no current thing to get part Position from.")
+	ecs.get_part(&query, .Position, Position)
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+query_get_part_missing_on_current_thing_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
+	@(static) backing: [512 * mem.Kilobyte]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	world: World
+	make_world(&world, mem.arena_allocator(&arena))
+	thing := ecs.spawn(&world)
+	ecs.set_now(&world, thing, .Position, Position{1, 2})
+
+	query := ecs.query_make(ecs.stuff_make(&world), {.Position}, {})
+	testing.expect(t, ecs.query_next(&query))
+
+	testing.expect_assert_message(
+		t,
+		fmt.tprintf("Query does not have part Velocity for thing %v.", thing),
+	)
+	ecs.get_part(&query, .Velocity, Velocity)
 	testing.fail_now(t, "The call did not assert.")
 }

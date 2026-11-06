@@ -11,11 +11,16 @@ HANDLE_GEN_BITS :: 12
 HANDLE_MAX_IDX :: 1 << HANDLE_IDX_BITS
 HANDLE_MAX_GEN :: 1 << HANDLE_GEN_BITS
 
+/* The untyped bits of a handle: `idx` picks the slot, `gen` tells reuses of it apart. */
 Handle_Raw :: bit_field u32 {
 	idx: Handle_Idx | HANDLE_IDX_BITS,
 	gen: Handle_Gen | HANDLE_GEN_BITS,
 }
 
+/*
+An opaque handle tagged with `T`, so handles of different tags can't be mixed up. A zeroed
+handle is nil. Build one with `handle_make`.
+*/
 Handle :: struct($T: typeid) {
 	using raw: Handle_Raw,
 }
@@ -23,6 +28,11 @@ Handle :: struct($T: typeid) {
 HANDLE_POOL_MIN_CAPACITY :: 64
 HANDLE_POOL_MAX_CAPACITY :: 1 << HANDLE_IDX_BITS
 
+/*
+Hands out and validates handles of tag `T`. It stores no data, anything that needs data per
+handle keeps its own array indexed by `handle.idx`. Slot 0 is reserved for the nil handle, so a
+pool of capacity N holds at most N - 1 handles.
+*/
 Handle_Pool :: struct($T: typeid) {
 	slots:      []Handle_Slot,
 	free:       []Handle_Idx,
@@ -31,6 +41,7 @@ Handle_Pool :: struct($T: typeid) {
 	allocator:  mem.Allocator,
 }
 
+/* The current `gen` of a slot and whether a handle to it is alive. */
 Handle_Slot :: bit_field u16 {
 	gen:      Handle_Gen | HANDLE_GEN_BITS,
 	is_alive: bool       | 1,
@@ -38,8 +49,14 @@ Handle_Slot :: bit_field u16 {
 
 // >--------------------------------------------------------------------- Handle
 
-// Fields promoted from a `using` bit_field are silently dropped in composite
-// literals, so `Handle(T){idx = 1}` is nil. Build handles through this instead.
+/*
+Makes a handle from its parts. Use it instead of a composite literal: fields promoted from a
+`using` bit_field are silently dropped there, so `Handle(T){idx = 1}` is nil.
+
+Asserts:
+- `idx` is less than HANDLE_MAX_IDX.
+- `gen` is less than HANDLE_MAX_GEN.
+*/
 handle_make :: proc($T: typeid, idx: Handle_Idx, gen: Handle_Gen = 0) -> Handle(T) {
 	assert(idx < HANDLE_MAX_IDX, "Handle idx has to be less than HANDLE_MAX_IDX.")
 	assert(gen < HANDLE_MAX_GEN, "Handle gen has to be less than HANDLE_MAX_GEN.")
@@ -49,6 +66,12 @@ handle_make :: proc($T: typeid, idx: Handle_Idx, gen: Handle_Gen = 0) -> Handle(
 
 // >---------------------------------------------------------------- Handle_Pool
 
+/*
+Initializes the pool with room for `capacity - 1` handles, allocated up front with `allocator`.
+
+Asserts:
+- `capacity` is between HANDLE_POOL_MIN_CAPACITY and HANDLE_POOL_MAX_CAPACITY.
+*/
 handle_pool_init :: proc(
 	pool: ^Handle_Pool($T),
 	capacity: int,
@@ -79,12 +102,17 @@ handle_pool_init :: proc(
 	}
 }
 
+/* Frees the pool with the allocator it was initialized with and zeroes it. */
 handle_pool_destroy :: proc(pool: ^Handle_Pool($T)) {
 	delete(pool.slots, pool.allocator)
 	delete(pool.free, pool.allocator)
 	pool^ = Handle_Pool(T){}
 }
 
+/*
+Kills every handle and starts every slot over at gen 0. Handles from before the reset can match
+new ones again, so drop them all.
+*/
 handle_pool_reset :: proc(pool: ^Handle_Pool($T)) {
 	mem.zero_slice(pool.slots)
 	mem.zero_slice(pool.free)
@@ -92,10 +120,17 @@ handle_pool_reset :: proc(pool: ^Handle_Pool($T)) {
 	pool.slots_next = 1
 }
 
+/* Counts the handles that are alive. */
 handle_pool_count_alive :: proc(pool: Handle_Pool($T)) -> int {
 	return pool.slots_next - 1 - pool.free_count
 }
 
+/*
+Spawns a handle, reusing the most recently killed slot first. Reusing a slot bumps its `gen`, so
+old handles to it stay dead. The gen wraps after HANDLE_MAX_GEN reuses of the same slot.
+
+Returns the nil handle when the pool is full.
+*/
 handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 	if (pool.free_count > 0) {
 		idx := pool.free[pool.free_count - 1]
@@ -120,6 +155,11 @@ handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 	}
 }
 
+/*
+Checks whether the handle is alive.
+
+Returns false for the nil handle, a stale handle and an `idx` out of range.
+*/
 handle_pool_is_alive :: proc(pool: Handle_Pool($T), handle: Handle(T)) -> bool {
 	if (int(handle.idx) >= len(pool.slots)) do return false
 
@@ -127,6 +167,11 @@ handle_pool_is_alive :: proc(pool: Handle_Pool($T), handle: Handle(T)) -> bool {
 	return slot.is_alive && slot.gen == handle.gen
 }
 
+/*
+Kills the handle, freeing its slot for reuse.
+
+Returns false if the handle is already dead.
+*/
 handle_pool_kill :: proc(pool: ^Handle_Pool($T), handle: Handle(T)) -> bool {
 	if (handle_pool_is_alive(pool^, handle)) {
 		handle_pool_kill_unchecked(pool, handle)
@@ -136,6 +181,10 @@ handle_pool_kill :: proc(pool: ^Handle_Pool($T), handle: Handle(T)) -> bool {
 	return false
 }
 
+/*
+Kills the handle without checking it. The handle has to be alive: killing a dead one puts its
+slot on the free stack twice.
+*/
 handle_pool_kill_unchecked :: proc(pool: ^Handle_Pool($T), handle: Handle(T)) {
 	slot := &pool.slots[handle.idx]
 	slot.is_alive = false
