@@ -49,10 +49,10 @@ every_pool_allocates_with_pool_allocator :: proc(t: ^testing.T) {
 	// Grow the part sets, their pages and the command buffer past their first allocation.
 	for _ in 0 ..< 32 {
 		thing := ecs.world_spawn(&world)
-		ecs.world_set_now(&world, thing, .Position, Position{1, 2})
-		ecs.world_set_later(&world, thing, .Velocity, Velocity{3, 4})
+		ecs.set_now(&world, thing, .Position, Position{1, 2})
+		ecs.set_later(&world, thing, .Velocity, Velocity{3, 4})
 	}
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Velocity), 32)
 
 	ecs.world_destroy(&world)
@@ -67,8 +67,8 @@ destroy_destroys_parts :: proc(t: ^testing.T) {
 	destroyed_count = 0
 
 	vel := Velocity{1, 1}
-	ecs.world_set_now(&world, ecs.world_spawn(&world), .Velocity, &vel)
-	ecs.world_set_now(&world, ecs.world_spawn(&world), .Velocity, &vel)
+	ecs.set_now(&world, ecs.world_spawn(&world), .Velocity, &vel)
+	ecs.set_now(&world, ecs.world_spawn(&world), .Velocity, &vel)
 	ecs.world_destroy(&world)
 
 	testing.expect_value(t, destroyed_count, 2)
@@ -81,10 +81,10 @@ reset_kills_everything_keeps_registrations :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, thing, .Position, &Position{1, 2})
+	ecs.set_now(&world, thing, .Position, &Position{1, 2})
 	ecs.world_reset(&world)
 
-	testing.expect(t, !ecs.world_poke(&world, thing))
+	testing.expect(t, !ecs.world_is_alive(&world, thing))
 	testing.expect_value(t, ecs.world_count_alive(&world), 0)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 0)
 	testing.expect(t, ecs.world_is_registered(&world, .Position))
@@ -104,7 +104,7 @@ set_now_and_get_part :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, thing, .Position, &Position{1, 2})
+	ecs.set_now(&world, thing, .Position, &Position{1, 2})
 
 	testing.expect(t, ecs.world_has(&world, thing, .Position))
 	testing.expect(t, !ecs.world_has(&world, thing, .Velocity))
@@ -124,10 +124,10 @@ set_now_overloads :: proc(t: ^testing.T) {
 	d := ecs.world_spawn(&world)
 
 	position := Position{3, 4}
-	by_value := ecs.world_set_now(&world, a, .Position, Position{1, 2})
-	by_pointer := ecs.world_set_now(&world, b, .Position, &position)
-	zeroed := ecs.world_set_now(&world, c, .Position, Position)
-	from_nil := ecs.world_set_now(&world, d, .Position, (^Position)(nil))
+	by_value := ecs.set_now(&world, a, .Position, Position{1, 2})
+	by_pointer := ecs.set_now(&world, b, .Position, &position)
+	zeroed := ecs.set_now(&world, c, .Position, Position)
+	from_nil := ecs.set_now(&world, d, .Position, (^Position)(nil))
 
 	testing.expect_value(t, by_value^, Position{1, 2})
 	testing.expect_value(t, by_pointer^, Position{3, 4})
@@ -143,8 +143,8 @@ set_now_existing_overwrites :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, thing, .Position, Position{1, 2})
-	ecs.world_set_now(&world, thing, .Position, Position{3, 4})
+	ecs.set_now(&world, thing, .Position, Position{1, 2})
+	ecs.set_now(&world, thing, .Position, Position{3, 4})
 
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
 	testing.expect_value(t, ecs.world_get_part(&world, thing, .Position, Position)^, Position{3, 4})
@@ -157,8 +157,8 @@ kinds_can_share_a_type :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, thing, .Position, Position{1, 2})
-	ecs.world_set_now(&world, thing, .Target, Position{5, 6})
+	ecs.set_now(&world, thing, .Position, Position{1, 2})
+	ecs.set_now(&world, thing, .Target, Position{5, 6})
 
 	testing.expect_value(t, ecs.world_get_part(&world, thing, .Position, Position)^, Position{1, 2})
 	testing.expect_value(t, ecs.world_get_part(&world, thing, .Target, Position)^, Position{5, 6})
@@ -175,8 +175,8 @@ remove_now_removes_part :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, thing, .Position, &Position{1, 2})
-	ecs.world_set_now(&world, thing, .Tag, Tag{})
+	ecs.set_now(&world, thing, .Position, &Position{1, 2})
+	ecs.set_now(&world, thing, .Tag, Tag{})
 
 	testing.expect(t, ecs.world_remove_now(&world, thing, .Position))
 	testing.expect(t, !ecs.world_remove_now(&world, thing, .Position))
@@ -197,13 +197,13 @@ kill_now_removes_all_parts :: proc(t: ^testing.T) {
 
 	a := ecs.world_spawn(&world)
 	b := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, a, .Position, &Position{1, 1})
-	ecs.world_set_now(&world, a, .Velocity, &Velocity{1, 1})
-	ecs.world_set_now(&world, b, .Position, &Position{2, 2})
+	ecs.set_now(&world, a, .Position, &Position{1, 1})
+	ecs.set_now(&world, a, .Velocity, &Velocity{1, 1})
+	ecs.set_now(&world, b, .Position, &Position{2, 2})
 
 	testing.expect(t, ecs.world_kill_now(&world, a))
 
-	testing.expect(t, !ecs.world_poke(&world, a))
+	testing.expect(t, !ecs.world_is_alive(&world, a))
 	testing.expect_value(t, destroyed_count, 1)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Velocity), 0)
@@ -228,9 +228,9 @@ kill_now_fails_for_dead_things :: proc(t: ^testing.T) {
 
 	// A stale thing must not kill the thing reusing its idx.
 	new := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, new, .Position, Position{1, 2})
+	ecs.set_now(&world, new, .Position, Position{1, 2})
 	testing.expect(t, !ecs.world_kill_now(&world, old))
-	testing.expect(t, ecs.world_poke(&world, new))
+	testing.expect(t, ecs.world_is_alive(&world, new))
 	testing.expect(t, ecs.world_has(&world, new, .Position))
 
 	testing.expect(t, !ecs.world_kill_now(&world, ecs.THING_NIL))
@@ -246,8 +246,8 @@ set_now_on_dead_thing_returns_nil :: proc(t: ^testing.T) {
 	ecs.world_kill_now(&world, old)
 	new := ecs.world_spawn(&world)
 
-	testing.expect(t, ecs.world_set_now(&world, old, .Position, Position{1, 2}) == nil)
-	testing.expect(t, ecs.world_set_now(&world, ecs.THING_NIL, .Position, Position) == nil)
+	testing.expect(t, ecs.set_now(&world, old, .Position, Position{1, 2}) == nil)
+	testing.expect(t, ecs.set_now(&world, ecs.THING_NIL, .Position, Position) == nil)
 	testing.expect(t, !ecs.world_add_now(&world, old, .Tag))
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 0)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Tag), 0)
@@ -264,7 +264,7 @@ add_now_inserts_zeroed_part :: proc(t: ^testing.T) {
 	testing.expect(t, ecs.world_add_now(&world, thing, .Tag))
 	testing.expect(t, ecs.world_has(&world, thing, .Tag))
 
-	ecs.world_set_now(&world, thing, .Position, Position{1, 2})
+	ecs.set_now(&world, thing, .Position, Position{1, 2})
 	testing.expect(t, ecs.world_add_now(&world, thing, .Position))
 	testing.expect_value(t, ecs.world_get_part(&world, thing, .Position, Position)^, Position{})
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
@@ -285,7 +285,7 @@ get_parts_and_things_match_up :: proc(t: ^testing.T) {
 	spawned: [4]ecs.Thing
 	for &thing, i in spawned {
 		thing = ecs.world_spawn(&world)
-		ecs.world_set_now(&world, thing, .Position, &Position{f32(i), 0})
+		ecs.set_now(&world, thing, .Position, &Position{f32(i), 0})
 	}
 	ecs.world_kill_now(&world, spawned[1])
 
@@ -305,8 +305,8 @@ get_parts_of_tags_has_length :: proc(t: ^testing.T) {
 	make_world(&world)
 	defer ecs.world_destroy(&world)
 
-	ecs.world_set_now(&world, ecs.world_spawn(&world), .Tag, Tag{})
-	ecs.world_set_now(&world, ecs.world_spawn(&world), .Tag, Tag{})
+	ecs.set_now(&world, ecs.world_spawn(&world), .Tag, Tag{})
+	ecs.set_now(&world, ecs.world_spawn(&world), .Tag, Tag{})
 
 	testing.expect_value(t, len(ecs.world_get_parts(&world, .Tag, Tag)), 2)
 	testing.expect_value(t, len(ecs.world_get_things(&world, .Tag)), 2)
@@ -315,22 +315,22 @@ get_parts_of_tags_has_length :: proc(t: ^testing.T) {
 // >------------------------------------------------------------------- Commands
 
 @(test)
-later_waits_for_apply_self :: proc(t: ^testing.T) {
+later_waits_for_apply :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_later(&world, thing, .Position, Position{1, 2})
+	ecs.set_later(&world, thing, .Position, Position{1, 2})
 	ecs.world_add_later(&world, thing, .Tag)
 
-	testing.expect_value(t, ecs.world_count_commands(&world), 2)
+	testing.expect_value(t, ecs.world_count_cmds(&world), 2)
 	testing.expect(t, !ecs.world_has(&world, thing, .Position))
 	testing.expect(t, !ecs.world_has(&world, thing, .Tag))
 
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 
-	testing.expect_value(t, ecs.world_count_commands(&world), 0)
+	testing.expect_value(t, ecs.world_count_cmds(&world), 0)
 	testing.expect_value(t, ecs.world_get_part(&world, thing, .Position, Position)^, Position{1, 2})
 	testing.expect(t, ecs.world_has(&world, thing, .Tag))
 }
@@ -347,15 +347,15 @@ set_later_overloads :: proc(t: ^testing.T) {
 	d := ecs.world_spawn(&world)
 
 	position := Position{3, 4}
-	ecs.world_set_later(&world, a, .Position, Position{1, 2})
-	ecs.world_set_later(&world, b, .Position, &position)
-	ecs.world_set_later(&world, c, .Position, Position)
-	ecs.world_set_later(&world, d, .Position, (^Position)(nil))
+	ecs.set_later(&world, a, .Position, Position{1, 2})
+	ecs.set_later(&world, b, .Position, &position)
+	ecs.set_later(&world, c, .Position, Position)
+	ecs.set_later(&world, d, .Position, (^Position)(nil))
 
 	// The part is copied when recorded.
 	position = Position{9, 9}
 
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 
 	testing.expect_value(t, ecs.world_get_part(&world, a, .Position, Position)^, Position{1, 2})
 	testing.expect_value(t, ecs.world_get_part(&world, b, .Position, Position)^, Position{3, 4})
@@ -372,9 +372,9 @@ set_later_overwrites_existing :: proc(t: ^testing.T) {
 	destroyed_count = 0
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, thing, .Velocity, Velocity{1, 2})
-	ecs.world_set_later(&world, thing, .Velocity, Velocity{3, 4})
-	ecs.world_apply_self(&world)
+	ecs.set_now(&world, thing, .Velocity, Velocity{1, 2})
+	ecs.set_later(&world, thing, .Velocity, Velocity{3, 4})
+	ecs.world_apply(&world)
 
 	testing.expect_value(t, destroyed_count, 1)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Velocity), 1)
@@ -388,8 +388,8 @@ later_supports_zero_sized_parts :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_later(&world, thing, .Tag, Tag{})
-	ecs.world_apply_self(&world)
+	ecs.set_later(&world, thing, .Tag, Tag{})
+	ecs.world_apply(&world)
 
 	testing.expect(t, ecs.world_has(&world, thing, .Tag))
 }
@@ -401,19 +401,19 @@ remove_later_removes_part :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, thing, .Position, Position{1, 2})
-	ecs.world_set_now(&world, thing, .Tag, Tag{})
+	ecs.set_now(&world, thing, .Position, Position{1, 2})
+	ecs.set_now(&world, thing, .Tag, Tag{})
 
 	ecs.world_remove_later(&world, thing, .Position)
 	testing.expect(t, ecs.world_has(&world, thing, .Position))
 
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 	testing.expect(t, !ecs.world_has(&world, thing, .Position))
 	testing.expect(t, ecs.world_has(&world, thing, .Tag))
 
 	// Removing a missing part is skipped.
 	ecs.world_remove_later(&world, thing, .Position)
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 	testing.expect(t, ecs.world_has(&world, thing, .Tag))
 }
 
@@ -424,13 +424,13 @@ kill_later_kills_on_apply :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, thing, .Position, Position{1, 2})
+	ecs.set_now(&world, thing, .Position, Position{1, 2})
 
 	ecs.world_kill_later(&world, thing)
-	testing.expect(t, ecs.world_poke(&world, thing))
+	testing.expect(t, ecs.world_is_alive(&world, thing))
 
-	ecs.world_apply_self(&world)
-	testing.expect(t, !ecs.world_poke(&world, thing))
+	ecs.world_apply(&world)
+	testing.expect(t, !ecs.world_is_alive(&world, thing))
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 0)
 }
 
@@ -444,22 +444,22 @@ apply_keeps_record_order :: proc(t: ^testing.T) {
 	b := ecs.world_spawn(&world)
 
 	// Set then kill: the set happens, then the kill removes it.
-	ecs.world_set_later(&world, a, .Position, Position{1, 2})
+	ecs.set_later(&world, a, .Position, Position{1, 2})
 	ecs.world_kill_later(&world, a)
 
 	// Kill then set: the set is skipped, the thing is dead by then.
 	ecs.world_kill_later(&world, b)
-	ecs.world_set_later(&world, b, .Position, Position{3, 4})
+	ecs.set_later(&world, b, .Position, Position{3, 4})
 
 	// Set twice: the last one wins.
 	c := ecs.world_spawn(&world)
-	ecs.world_set_later(&world, c, .Position, Position{5, 6})
-	ecs.world_set_later(&world, c, .Position, Position{7, 8})
+	ecs.set_later(&world, c, .Position, Position{5, 6})
+	ecs.set_later(&world, c, .Position, Position{7, 8})
 
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 
-	testing.expect(t, !ecs.world_poke(&world, a))
-	testing.expect(t, !ecs.world_poke(&world, b))
+	testing.expect(t, !ecs.world_is_alive(&world, a))
+	testing.expect(t, !ecs.world_is_alive(&world, b))
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
 	testing.expect_value(t, ecs.world_get_part(&world, c, .Position, Position)^, Position{7, 8})
 }
@@ -474,18 +474,18 @@ later_skips_stale_and_nil_things :: proc(t: ^testing.T) {
 	ecs.world_kill_now(&world, old)
 	new := ecs.world_spawn(&world)
 
-	ecs.world_set_later(&world, old, .Position, Position{1, 2})
+	ecs.set_later(&world, old, .Position, Position{1, 2})
 	ecs.world_add_later(&world, old, .Tag)
 	ecs.world_kill_later(&world, old)
 
 	// THING_NIL is never recorded.
-	ecs.world_set_later(&world, ecs.THING_NIL, .Position, Position{1, 2})
+	ecs.set_later(&world, ecs.THING_NIL, .Position, Position{1, 2})
 	ecs.world_kill_later(&world, ecs.THING_NIL)
-	testing.expect_value(t, ecs.world_count_commands(&world), 3)
+	testing.expect_value(t, ecs.world_count_cmds(&world), 3)
 
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 
-	testing.expect(t, ecs.world_poke(&world, new))
+	testing.expect(t, ecs.world_is_alive(&world, new))
 	testing.expect(t, !ecs.world_has(&world, new, .Position))
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 0)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Tag), 0)
@@ -498,13 +498,13 @@ reset_drops_recorded_cmds :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_later(&world, thing, .Position, Position{1, 2})
+	ecs.set_later(&world, thing, .Position, Position{1, 2})
 	ecs.world_reset(&world)
 
-	testing.expect_value(t, ecs.world_count_commands(&world), 0)
+	testing.expect_value(t, ecs.world_count_cmds(&world), 0)
 
 	again := ecs.world_spawn(&world)
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 	testing.expect(t, !ecs.world_has(&world, again, .Position))
 }
 
@@ -515,80 +515,80 @@ destroy_frees_recorded_cmds :: proc(t: ^testing.T) {
 
 	// Leaks would be reported by the test runner's tracking allocator.
 	thing := ecs.world_spawn(&world)
-	ecs.world_set_later(&world, thing, .Position, Position{1, 2})
+	ecs.set_later(&world, thing, .Position, Position{1, 2})
 	ecs.world_destroy(&world)
 }
 
 @(test)
-apply_other_applies_and_keeps_buffer :: proc(t: ^testing.T) {
+apply_buffer_applies_and_keeps_buffer :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
-	cmds: Cmd_Pool
-	ecs.cmd_pool_init(&cmds)
-	defer ecs.cmd_pool_destroy(&cmds)
+	buffer: Cmd_Buffer
+	ecs.cmd_buffer_init(&buffer)
+	defer ecs.cmd_buffer_destroy(&buffer)
 
 	a := ecs.world_spawn(&world)
 	b := ecs.world_spawn(&world)
-	ecs.world_set_now(&world, b, .Tag, Tag{})
+	ecs.set_now(&world, b, .Tag, Tag{})
 
 	position := Position{1, 2}
-	ecs.cmd_pool_record_set_value(&cmds, a, .Position, &position, size_of(Position))
-	ecs.cmd_pool_record_set_zero(&cmds, a, .Velocity)
-	ecs.cmd_pool_record_remove(&cmds, b, .Tag)
+	ecs.cmd_buffer_record_set_value(&buffer, a, .Position, &position, size_of(Position))
+	ecs.cmd_buffer_record_set_zero(&buffer, a, .Velocity)
+	ecs.cmd_buffer_record_remove(&buffer, b, .Tag)
 
-	ecs.world_apply_other(&world, &cmds)
+	ecs.world_apply_buffer(&world, &buffer)
 
 	testing.expect_value(t, ecs.world_get_part(&world, a, .Position, Position)^, Position{1, 2})
 	testing.expect_value(t, ecs.world_get_part(&world, a, .Velocity, Velocity)^, Velocity{})
 	testing.expect(t, !ecs.world_has(&world, b, .Tag))
-	testing.expect_value(t, len(cmds.commands), 3)
-	testing.expect_value(t, ecs.world_count_commands(&world), 0)
+	testing.expect_value(t, len(buffer.cmds), 3)
+	testing.expect_value(t, ecs.world_count_cmds(&world), 0)
 }
 
 @(test)
-apply_other_replays_into_many_worlds :: proc(t: ^testing.T) {
+apply_buffer_replays_into_many_worlds :: proc(t: ^testing.T) {
 	first, second: World
 	make_world(&first)
 	defer ecs.world_destroy(&first)
 	make_world(&second)
 	defer ecs.world_destroy(&second)
-	cmds: Cmd_Pool
-	ecs.cmd_pool_init(&cmds)
-	defer ecs.cmd_pool_destroy(&cmds)
+	buffer: Cmd_Buffer
+	ecs.cmd_buffer_init(&buffer)
+	defer ecs.cmd_buffer_destroy(&buffer)
 
 	// Worlds spawned the same way hand out the same things.
 	thing := ecs.world_spawn(&first)
 	testing.expect_value(t, ecs.world_spawn(&second), thing)
 
 	position := Position{1, 2}
-	ecs.cmd_pool_record_set_value(&cmds, thing, .Position, &position, size_of(Position))
+	ecs.cmd_buffer_record_set_value(&buffer, thing, .Position, &position, size_of(Position))
 
-	ecs.world_apply_other(&first, &cmds)
-	ecs.world_apply_other(&second, &cmds)
+	ecs.world_apply_buffer(&first, &buffer)
+	ecs.world_apply_buffer(&second, &buffer)
 
 	testing.expect_value(t, ecs.world_get_part(&first, thing, .Position, Position)^, Position{1, 2})
 	testing.expect_value(t, ecs.world_get_part(&second, thing, .Position, Position)^, Position{1, 2})
 }
 
 @(test)
-apply_other_leaves_own_cmds_pending :: proc(t: ^testing.T) {
+apply_buffer_leaves_own_cmds_pending :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
-	cmds: Cmd_Pool
-	ecs.cmd_pool_init(&cmds)
-	defer ecs.cmd_pool_destroy(&cmds)
+	buffer: Cmd_Buffer
+	ecs.cmd_buffer_init(&buffer)
+	defer ecs.cmd_buffer_destroy(&buffer)
 
 	thing := ecs.world_spawn(&world)
 	ecs.world_add_later(&world, thing, .Tag)
-	ecs.cmd_pool_record_set_zero(&cmds, thing, .Position)
+	ecs.cmd_buffer_record_set_zero(&buffer, thing, .Position)
 
-	ecs.world_apply_other(&world, &cmds)
+	ecs.world_apply_buffer(&world, &buffer)
 
 	testing.expect(t, ecs.world_has(&world, thing, .Position))
 	testing.expect(t, !ecs.world_has(&world, thing, .Tag))
-	testing.expect_value(t, ecs.world_count_commands(&world), 1)
+	testing.expect_value(t, ecs.world_count_cmds(&world), 1)
 }
 
 // >------------------------------------------------------------------ Resources
@@ -632,7 +632,7 @@ reset_zeroes_resources_keeps_registrations :: proc(t: ^testing.T) {
 }
 
 @(test)
-destroy_runs_resource_destroyers :: proc(t: ^testing.T) {
+destroy_runs_resource_destroy_fns :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	ecs.world_register_resource(&world, .Time, Time, count_destroyed_time)
@@ -673,7 +673,7 @@ run_goes_through_stages_in_order :: proc(t: ^testing.T) {
 	testing.expect_value(t, ecs.world_count_systems(&world), 3)
 
 	clear(&system_log)
-	ecs.world_run_all_sync(&world)
+	ecs.world_run_sync(&world)
 
 	testing.expect_value(t, len(system_log), 3)
 	testing.expect(t, system_log_index(0) < system_log_index(1))
@@ -697,7 +697,7 @@ run_stage_runs_only_that_stage :: proc(t: ^testing.T) {
 }
 
 @(test)
-run_stage_applies_commands_after_the_stage :: proc(t: ^testing.T) {
+run_stage_applies_cmds_after_the_stage :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
@@ -708,7 +708,7 @@ run_stage_applies_commands_after_the_stage :: proc(t: ^testing.T) {
 	ecs.world_schedule(&world, check_tag_system, .Render, {.Tag}, {})
 
 	clear(&system_log)
-	ecs.world_run_all_sync(&world)
+	ecs.world_run_sync(&world)
 
 	// Not applied yet within Update, applied by the time Render runs.
 	testing.expect_value(t, len(system_log), 3)
@@ -716,7 +716,7 @@ run_stage_applies_commands_after_the_stage :: proc(t: ^testing.T) {
 	testing.expect_value(t, system_log_count(11), 1)
 	testing.expect_value(t, system_log_count(12), 1)
 	testing.expect(t, system_log_index(12) < system_log_index(11))
-	testing.expect_value(t, ecs.world_count_commands(&world), 0)
+	testing.expect_value(t, ecs.world_count_cmds(&world), 0)
 	testing.expect(t, ecs.world_has(&world, system_target, .Tag))
 }
 
@@ -727,11 +727,11 @@ schedule_after_run_rebuilds_the_graph :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	ecs.world_schedule(&world, system_a, .Update, {}, {.Position})
-	ecs.world_run_all_sync(&world)
+	ecs.world_run_sync(&world)
 
 	ecs.world_schedule(&world, system_b, .Update, {.Position}, {})
 	clear(&system_log)
-	ecs.world_run_all_sync(&world)
+	ecs.world_run_sync(&world)
 
 	testing.expect_value(t, len(system_log), 2)
 	testing.expect(t, system_log_index(0) < system_log_index(1))
@@ -748,7 +748,7 @@ reset_keeps_scheduled_systems :: proc(t: ^testing.T) {
 	testing.expect_value(t, ecs.world_count_systems(&world), 1)
 
 	clear(&system_log)
-	ecs.world_run_all_sync(&world)
+	ecs.world_run_sync(&world)
 	testing.expect_value(t, system_log_count(0), 1)
 }
 
@@ -770,7 +770,7 @@ set_later_wrong_type_asserts_when_recording :: proc(t: ^testing.T) {
 	thing := ecs.world_spawn(&world)
 
 	testing.expect_assert_message(t, "Part kind Target is a Position, not a Velocity.")
-	ecs.world_set_later(&world, thing, .Target, Velocity{1, 2})
+	ecs.set_later(&world, thing, .Target, Velocity{1, 2})
 	testing.fail_now(t, "The call did not assert.")
 }
 

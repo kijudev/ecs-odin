@@ -122,7 +122,7 @@ handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 	}
 }
 
-handle_pool_check :: proc(pool: Handle_Pool($T), handle: Handle(T)) -> bool {
+handle_pool_is_alive :: proc(pool: Handle_Pool($T), handle: Handle(T)) -> bool {
 	if (int(handle.idx) >= len(pool.slots)) do return false
 
 	slot := pool.slots[handle.idx]
@@ -130,7 +130,7 @@ handle_pool_check :: proc(pool: Handle_Pool($T), handle: Handle(T)) -> bool {
 }
 
 handle_pool_kill :: proc(pool: ^Handle_Pool($T), handle: Handle(T)) -> bool {
-	if (handle_pool_check(pool^, handle)) {
+	if (handle_pool_is_alive(pool^, handle)) {
 		handle_pool_kill_unchecked(pool, handle)
 		return true
 	}

@@ -221,7 +221,7 @@ query_conflicting_parts_asserts :: proc(t: ^testing.T) {
 
 	testing.expect_assert_message(
 		t,
-		"Query has conflicting parts: Velocity is in both with and without.",
+		"Query has conflicting parts: Velocity is in both include and exclude.",
 	)
 	ecs.query_make(ecs.stuff_make(&world), {.Position, .Velocity}, {.Velocity, .Tag})
 	testing.fail_now(t, "The call did not assert.")

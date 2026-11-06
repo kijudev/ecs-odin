@@ -7,7 +7,7 @@ import ecs "../ecs"
 
 @(private = "file")
 system_graph_edge :: proc(graph: ^ecs.System_Graph, from, to: int) -> bool {
-	return graph.adj_matrix[from * ecs.SYSTEM_POOL_SIZE + to]
+	return graph.adj_matrix[from * ecs.SYSTEM_POOL_MAX_STAGE_CAPACITY + to]
 }
 
 // >---------------------------------------------------------------- System_Info
@@ -102,7 +102,7 @@ system_pool_usable_after_reset :: proc(t: ^testing.T) {
 
 	clear(&system_log)
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 1)
+	testing.expect_value(t, ecs.system_pool_run_stage_sync(&pool, .Update, stuff), 1)
 	testing.expect_value(t, len(system_log), 1)
 	testing.expect_value(t, system_log_count(1), 1)
 }
@@ -153,11 +153,11 @@ system_pool_fills_a_stage_exactly :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool)
 	defer ecs.system_pool_destroy(&pool)
 
-	for _ in 0 ..< ecs.SYSTEM_POOL_SIZE do ecs.system_pool_schedule(&pool, system_a, .Update, {}, {})
+	for _ in 0 ..< ecs.SYSTEM_POOL_MAX_STAGE_CAPACITY do ecs.system_pool_schedule(&pool, system_a, .Update, {}, {})
 	// The limit is per stage, other stages still have room.
 	ecs.system_pool_schedule(&pool, system_b, .Render, {}, {})
 
-	testing.expect_value(t, ecs.system_pool_count_systems(&pool), ecs.SYSTEM_POOL_SIZE + 1)
+	testing.expect_value(t, ecs.system_pool_count_systems(&pool), ecs.SYSTEM_POOL_MAX_STAGE_CAPACITY + 1)
 }
 
 // >---------------------------------------------------------------------- Graph
@@ -229,7 +229,7 @@ system_graph_rebuild_drops_old_edges :: proc(t: ^testing.T) {
 // >------------------------------------------------------------------------ Run
 
 @(test)
-system_pool_run_graph_sync_runs_each_system_once :: proc(t: ^testing.T) {
+system_pool_run_stage_sync_runs_each_system_once :: proc(t: ^testing.T) {
 	pool: System_Pool
 	ecs.system_pool_init(&pool)
 	defer ecs.system_pool_destroy(&pool)
@@ -242,7 +242,7 @@ system_pool_run_graph_sync_runs_each_system_once :: proc(t: ^testing.T) {
 
 	clear(&system_log)
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 3)
+	testing.expect_value(t, ecs.system_pool_run_stage_sync(&pool, .Update, stuff), 3)
 
 	testing.expect_value(t, len(system_log), 3)
 	for id in 0 ..< 3 do testing.expect_value(t, system_log_count(id), 1)
@@ -250,7 +250,7 @@ system_pool_run_graph_sync_runs_each_system_once :: proc(t: ^testing.T) {
 }
 
 @(test)
-system_pool_run_graph_sync_respects_conflicts :: proc(t: ^testing.T) {
+system_pool_run_stage_sync_respects_conflicts :: proc(t: ^testing.T) {
 	pool: System_Pool
 	ecs.system_pool_init(&pool)
 	defer ecs.system_pool_destroy(&pool)
@@ -264,7 +264,7 @@ system_pool_run_graph_sync_respects_conflicts :: proc(t: ^testing.T) {
 
 	clear(&system_log)
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 4)
+	testing.expect_value(t, ecs.system_pool_run_stage_sync(&pool, .Update, stuff), 4)
 
 	testing.expect(t, system_log_index(0) < system_log_index(1), "a before b")
 	testing.expect(t, system_log_index(1) < system_log_index(2), "b before c")
@@ -272,7 +272,7 @@ system_pool_run_graph_sync_respects_conflicts :: proc(t: ^testing.T) {
 }
 
 @(test)
-system_pool_run_graph_sync_can_run_again :: proc(t: ^testing.T) {
+system_pool_run_stage_sync_can_run_again :: proc(t: ^testing.T) {
 	pool: System_Pool
 	ecs.system_pool_init(&pool)
 	defer ecs.system_pool_destroy(&pool)
@@ -283,8 +283,8 @@ system_pool_run_graph_sync_can_run_again :: proc(t: ^testing.T) {
 
 	clear(&system_log)
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 2)
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 2)
+	testing.expect_value(t, ecs.system_pool_run_stage_sync(&pool, .Update, stuff), 2)
+	testing.expect_value(t, ecs.system_pool_run_stage_sync(&pool, .Update, stuff), 2)
 
 	testing.expect_value(t, len(system_log), 4)
 	testing.expect_value(t, system_log[2], 0)
@@ -292,7 +292,7 @@ system_pool_run_graph_sync_can_run_again :: proc(t: ^testing.T) {
 }
 
 @(test)
-system_pool_run_graph_sync_empty_stage :: proc(t: ^testing.T) {
+system_pool_run_stage_sync_empty_stage :: proc(t: ^testing.T) {
 	pool: System_Pool
 	ecs.system_pool_init(&pool)
 	defer ecs.system_pool_destroy(&pool)
@@ -300,7 +300,7 @@ system_pool_run_graph_sync_empty_stage :: proc(t: ^testing.T) {
 	ecs.system_pool_build_graphs(&pool)
 
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 0)
+	testing.expect_value(t, ecs.system_pool_run_stage_sync(&pool, .Update, stuff), 0)
 }
 
 // >------------------------------------------------------------------- Failures
@@ -317,7 +317,7 @@ system_pool_schedule_panics_when_stage_full :: proc(t: ^testing.T) {
 
 	pool: System_Pool
 	ecs.system_pool_init(&pool, mem.arena_allocator(&arena))
-	for _ in 0 ..< ecs.SYSTEM_POOL_SIZE do ecs.system_pool_schedule(&pool, system_a, .Update, {}, {})
+	for _ in 0 ..< ecs.SYSTEM_POOL_MAX_STAGE_CAPACITY do ecs.system_pool_schedule(&pool, system_a, .Update, {}, {})
 
 	testing.expect_assert_message(t, "Cannot schedule more than 256 systems in stage Update.")
 	ecs.system_pool_schedule(&pool, system_b, .Update, {}, {})
@@ -342,7 +342,7 @@ system_pool_schedule_nil_asserts :: proc(t: ^testing.T) {
 }
 
 @(test)
-system_pool_run_graph_sync_asserts_on_stale_graph :: proc(t: ^testing.T) {
+system_pool_run_stage_sync_asserts_on_stale_graph :: proc(t: ^testing.T) {
 	// Nothing to check when asserts are compiled out.
 	when ODIN_DISABLE_ASSERT do return
 
@@ -362,6 +362,6 @@ system_pool_run_graph_sync_asserts_on_stale_graph :: proc(t: ^testing.T) {
 		"System graph for stage Update is stale, it was built for 1 systems but there are 2.",
 	)
 
-	ecs.system_pool_run_graph_sync(&pool, .Update, stuff)
+	ecs.system_pool_run_stage_sync(&pool, .Update, stuff)
 	testing.fail_now(t, "The call did not assert.")
 }

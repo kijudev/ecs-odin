@@ -24,9 +24,9 @@ kill_later :: proc {
 	stuff_kill_later,
 }
 
-poke :: proc {
-	world_poke,
-	stuff_poke,
+is_alive :: proc {
+	world_is_alive,
+	stuff_is_alive,
 }
 
 count_alive :: proc {

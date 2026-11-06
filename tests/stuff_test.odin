@@ -27,19 +27,19 @@ stuff_spawns_and_kills_in_the_world :: proc(t: ^testing.T) {
 
 	a := ecs.spawn(stuff)
 	b := ecs.spawn(stuff)
-	testing.expect(t, ecs.poke(stuff, a))
-	testing.expect(t, ecs.world_poke(&world, b))
+	testing.expect(t, ecs.is_alive(stuff, a))
+	testing.expect(t, ecs.world_is_alive(&world, b))
 	testing.expect_value(t, ecs.count_alive(stuff), 2)
 
 	testing.expect(t, ecs.kill_now(stuff, a))
 	testing.expect(t, !ecs.kill_now(stuff, a))
-	testing.expect(t, !ecs.poke(stuff, a))
+	testing.expect(t, !ecs.is_alive(stuff, a))
 	testing.expect_value(t, ecs.count_free(stuff), 1)
 
 	ecs.kill_later(stuff, b)
-	testing.expect(t, ecs.poke(stuff, b))
-	ecs.world_apply_self(&world)
-	testing.expect(t, !ecs.poke(stuff, b))
+	testing.expect(t, ecs.is_alive(stuff, b))
+	ecs.world_apply(&world)
+	testing.expect(t, !ecs.is_alive(stuff, b))
 	testing.expect_value(t, ecs.count_alive(stuff), 0)
 	testing.expect_value(t, ecs.count_free(stuff), 2)
 }
@@ -91,10 +91,10 @@ stuff_later_procs_record_into_the_world :: proc(t: ^testing.T) {
 	ecs.add_later(stuff, a, .Tag)
 	ecs.remove_later(stuff, b, .Tag)
 
-	testing.expect_value(t, ecs.world_count_commands(&world), 5)
+	testing.expect_value(t, ecs.world_count_cmds(&world), 5)
 	testing.expect(t, !ecs.has(stuff, a, .Position))
 
-	ecs.world_apply_self(&world)
+	ecs.world_apply(&world)
 	testing.expect_value(t, ecs.get_part(stuff, a, .Position, Position)^, Position{1, 2})
 	testing.expect_value(t, ecs.get_part(stuff, a, .Velocity, Velocity)^, vel)
 	testing.expect_value(t, ecs.get_part(stuff, b, .Position, Position)^, Position{})

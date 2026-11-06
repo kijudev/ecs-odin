@@ -32,8 +32,8 @@ stuff_kill_later :: proc(stuff: Stuff($P, $R, $S), thing: Thing) {
 	world_kill_later(stuff.world, thing)
 }
 
-stuff_poke :: proc(stuff: Stuff($P, $R, $S), thing: Thing) -> bool {
-	return world_poke(stuff.world, thing)
+stuff_is_alive :: proc(stuff: Stuff($P, $R, $S), thing: Thing) -> bool {
+	return world_is_alive(stuff.world, thing)
 }
 
 stuff_count_alive :: proc(stuff: Stuff($P, $R, $S)) -> int {
@@ -66,12 +66,6 @@ stuff_count_parts :: proc(stuff: Stuff($P, $R, $S), kind: P) -> int {
 	return world_count_parts(stuff.world, kind)
 }
 
-stuff_set_now :: proc {
-	stuff_set_value_now,
-	stuff_set_pointer_now,
-	stuff_set_zero_now,
-}
-
 stuff_set_value_now :: proc(
 	stuff: Stuff($P, $R, $S),
 	thing: Thing,
@@ -97,12 +91,6 @@ stuff_add_now :: proc(stuff: Stuff($P, $R, $S), thing: Thing, kind: P) -> bool {
 
 stuff_remove_now :: proc(stuff: Stuff($P, $R, $S), thing: Thing, kind: P) -> bool {
 	return world_remove_now(stuff.world, thing, kind)
-}
-
-stuff_set_later :: proc {
-	stuff_set_value_later,
-	stuff_set_pointer_later,
-	stuff_set_zero_later,
 }
 
 stuff_set_value_later :: proc(

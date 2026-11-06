@@ -9,8 +9,8 @@ Query :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enu
 	intrinsics.type_is_enum(R),
 	intrinsics.type_is_enum(S) {
 	stuff:      Stuff(P, R, S),
-	qwith:      Archetype(P),
-	qwithout:   Archetype(P),
+	include:      Archetype(P),
+	exclude:   Archetype(P),
 	first_kind: P,
 	thing:      Thing,
 	iter_pos:   int,
@@ -20,19 +20,19 @@ Query :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enu
 
 query_make :: proc(
 	stuff: Stuff($P, $R, $S),
-	qwith: bit_set[P],
-	qwithout: bit_set[P],
+	include: bit_set[P],
+	exclude: bit_set[P],
 ) -> Query(P, R, S) {
 	query := Query(P, R, S) {
 		stuff    = stuff,
-		qwith    = archetype_make(qwith),
-		qwithout = archetype_make(qwithout),
+		include    = archetype_make(include),
+		exclude = archetype_make(exclude),
 	}
 
-	assert(!archetype_is_empty(query.qwith), "Query needs at least one part to iterate.")
+	assert(!archetype_is_empty(query.include), "Query needs at least one part to iterate.")
 
-	kind, ok := check_conflicts(query.qwith, query.qwithout)
-	fmt.assertf(ok, "Query has conflicting parts: %v is in both with and without.", kind)
+	kind, ok := check_conflicts(query.include, query.exclude)
+	fmt.assertf(ok, "Query has conflicting parts: %v is in both include and exclude.", kind)
 
 	query_refresh(&query)
 	return query
@@ -53,7 +53,7 @@ query_next :: proc(query: ^Query($P, $R, $S)) -> bool {
 		query.iter_pos += 1
 		archetype := archetype_pool_get(world.archetype_pool, thing)
 
-		if satisfies(archetype, query.qwith, query.qwithout) {
+		if satisfies(archetype, query.include, query.exclude) {
 			query.thing = thing
 			return true
 		}
@@ -80,8 +80,8 @@ query_get_thing :: proc(query: ^Query($P, $R, $S)) -> Thing {
 // >------------------------------------------------------------------ Internals
 
 @(private = "file")
-satisfies :: proc(archetype: Archetype($P), qwith: Archetype(P), qwithout: Archetype(P)) -> bool {
-	return archetype_contains(archetype, qwith) && archetype_is_disjoint(archetype, qwithout)
+satisfies :: proc(archetype: Archetype($P), include: Archetype(P), exclude: Archetype(P)) -> bool {
+	return archetype_contains(archetype, include) && archetype_is_disjoint(archetype, exclude)
 }
 
 @(private = "file")
@@ -89,7 +89,7 @@ find_first_kind :: proc(query: ^Query($P, $R, $S)) -> P {
 	kind := P{}
 	size := max(int)
 
-	it := archetype_iter_make(query.qwith)
+	it := archetype_iter_make(query.include)
 	for k in archetype_iter_next(&it) {
 		count := part_pool_count_parts(&query.stuff.world.part_pool, k)
 		if count < size {
@@ -102,8 +102,8 @@ find_first_kind :: proc(query: ^Query($P, $R, $S)) -> P {
 }
 
 @(private = "file")
-check_conflicts :: proc(qwith: Archetype($P), qwithout: Archetype(P)) -> (P, bool) {
-	it := archetype_iter_make(archetype_intersect(qwith, qwithout))
+check_conflicts :: proc(include: Archetype($P), exclude: Archetype(P)) -> (P, bool) {
+	it := archetype_iter_make(archetype_intersect(include, exclude))
 	for kind in archetype_iter_next(&it) do return kind, false
 	return P{}, true
 }

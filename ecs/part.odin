@@ -27,7 +27,7 @@ Part_Set :: struct {
 	parts_data:     []byte,
 	parts_capacity: int,
 	parts_size:     int,
-	destroy_part:   proc(part: rawptr),
+	destroy:   proc(part: rawptr),
 	allocator:      mem.Allocator,
 }
 
@@ -39,14 +39,14 @@ Part_Pool :: struct($P: typeid) where intrinsics.type_is_enum(P) {
 }
 
 @(private = "file")
-Part_Zero_Sized: u8
+Part_Zero_Sized: byte
 
 // >------------------------------------------------------------------- Part_Set
 
 part_set_init :: proc(
 	set: ^Part_Set,
 	part_info: ^runtime.Type_Info,
-	destroy_part: proc(part: rawptr) = nil,
+	destroy: proc(part: rawptr) = nil,
 	allocator: mem.Allocator = context.allocator,
 ) {
 	assert(part_info != nil, "Part set needs the part type info.")
@@ -60,7 +60,7 @@ part_set_init :: proc(
 		parts_data     = nil,
 		parts_capacity = 0,
 		parts_size     = 0,
-		destroy_part   = destroy_part,
+		destroy   = destroy,
 		allocator      = allocator,
 	}
 
@@ -87,14 +87,14 @@ part_set_has :: proc(set: ^Part_Set, thing: Thing) -> bool {
 	return ok
 }
 
-part_set_get_part :: proc(set: ^Part_Set, thing: Thing) -> rawptr {
+part_set_get :: proc(set: ^Part_Set, thing: Thing) -> rawptr {
 	idx, ok := dense_idx(set, thing)
 	if !ok do return nil
 
 	return parts_get_unchecked(set, idx)
 }
 
-part_set_get_part_unchecked :: proc(set: ^Part_Set, thing: Thing) -> rawptr {
+part_set_get_unchecked :: proc(set: ^Part_Set, thing: Thing) -> rawptr {
 	return parts_get_unchecked(set, dense_idx_unchecked(set, thing))
 }
 
@@ -110,7 +110,7 @@ part_set_insert :: proc(set: ^Part_Set, thing: Thing, part: rawptr = nil) -> raw
 	result := parts_get_unchecked(set, idx)
 	if result == part do return result
 
-	if set.destroy_part != nil do set.destroy_part(result)
+	if set.destroy != nil do set.destroy(result)
 	parts_write(set, result, part)
 
 	return result
@@ -185,14 +185,14 @@ part_pool_register :: proc(
 	pool: ^Part_Pool($P),
 	kind: P,
 	$T: typeid,
-	destroy_part: proc(part: rawptr) = nil,
+	destroy: proc(part: rawptr) = nil,
 ) {
 	fmt.assertf(kind not_in pool.registered, "Part kind %v is already registered.", kind)
 
 	pool.types[kind] = T
 	pool.registered += {kind}
 
-	part_set_init(&pool.sets[kind], type_info_of(T), destroy_part, pool.allocator)
+	part_set_init(&pool.sets[kind], type_info_of(T), destroy, pool.allocator)
 }
 
 part_pool_is_registered :: proc(pool: ^Part_Pool($P), kind: P) -> bool {
@@ -230,13 +230,13 @@ part_pool_has :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P) -> bool {
 // Returns nil when the thing does not have the part.
 part_pool_get :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P, $T: typeid) -> ^T {
 	part_pool_assert_type(pool, kind, T)
-	return cast(^T)part_set_get_part(&pool.sets[kind], thing)
+	return cast(^T)part_set_get(&pool.sets[kind], thing)
 }
 
 // Assumes the thing has the part.
 part_pool_get_unchecked :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P, $T: typeid) -> ^T {
 	part_pool_assert_type(pool, kind, T)
-	return cast(^T)part_set_get_part_unchecked(&pool.sets[kind], thing)
+	return cast(^T)part_set_get_unchecked(&pool.sets[kind], thing)
 }
 
 part_pool_get_parts :: proc(pool: ^Part_Pool($P), kind: P, $T: typeid) -> []T {
@@ -338,11 +338,11 @@ dense_idx_unchecked :: proc(set: ^Part_Set, thing: Thing) -> int {
 
 @(private = "file")
 parts_destroy_all :: proc(set: ^Part_Set) {
-	if set.destroy_part == nil do return
+	if set.destroy == nil do return
 
 	for i in 0 ..< set.parts_size {
 		part := parts_get_unchecked(set, i)
-		set.destroy_part(part)
+		set.destroy(part)
 	}
 }
 
@@ -353,7 +353,7 @@ parts_remove_swap :: proc(set: ^Part_Set, target_idx: int) {
 	target := parts_get_unchecked(set, target_idx)
 	last := parts_get_unchecked(set, last_idx)
 
-	if set.destroy_part != nil do set.destroy_part(target)
+	if set.destroy != nil do set.destroy(target)
 	if target_idx != last_idx do mem.copy(target, last, set.part_size)
 
 	set.parts_size -= 1

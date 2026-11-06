@@ -11,7 +11,7 @@ World :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enu
 	intrinsics.type_is_enum(S) {
 	thing_pool:     Thing_Pool,
 	archetype_pool: Archetype_Pool(P),
-	cmd_pool:       Cmd_Pool(P),
+	cmd_buffer:       Cmd_Buffer(P),
 	part_pool:      Part_Pool(P),
 	resource_pool:  Resource_Pool(R),
 	system_pool:    System_Pool(P, R, S),
@@ -31,7 +31,7 @@ world_init :: proc(
 
 	thing_pool_init(&world.thing_pool, capacity, world.pool_allocator)
 	archetype_pool_init(&world.archetype_pool, capacity, world.pool_allocator)
-	cmd_pool_init(&world.cmd_pool, allocator = world.pool_allocator)
+	cmd_buffer_init(&world.cmd_buffer, allocator = world.pool_allocator)
 	part_pool_init(&world.part_pool, world.pool_allocator)
 	resource_pool_init(&world.resource_pool, resource_capacity, world.pool_allocator)
 	system_pool_init(&world.system_pool, world.pool_allocator)
@@ -40,7 +40,7 @@ world_init :: proc(
 world_destroy :: proc(world: ^World($P, $R, $S)) {
 	thing_pool_destroy(&world.thing_pool)
 	archetype_pool_destroy(&world.archetype_pool)
-	cmd_pool_destroy(&world.cmd_pool)
+	cmd_buffer_destroy(&world.cmd_buffer)
 	part_pool_destroy(&world.part_pool)
 	resource_pool_destroy(&world.resource_pool)
 	system_pool_destroy(&world.system_pool)
@@ -53,7 +53,7 @@ world_destroy :: proc(world: ^World($P, $R, $S)) {
 world_reset :: proc(world: ^World($P, $R, $S)) {
 	thing_pool_reset(&world.thing_pool)
 	archetype_pool_reset(&world.archetype_pool)
-	cmd_pool_reset(&world.cmd_pool)
+	cmd_buffer_reset(&world.cmd_buffer)
 	part_pool_reset(&world.part_pool)
 	resource_pool_reset(&world.resource_pool)
 }
@@ -78,7 +78,7 @@ world_spawn :: proc(world: ^World($P, $R, $S)) -> Thing {
 }
 
 world_kill_now :: proc(world: ^World($P, $R, $S), thing: Thing) -> bool {
-	if !thing_pool_poke(world.thing_pool, thing) do return false
+	if !thing_pool_is_alive(world.thing_pool, thing) do return false
 
 	it := archetype_iter_make(archetype_pool_get(world.archetype_pool, thing))
 	for kind in archetype_iter_next(&it) {
@@ -90,8 +90,8 @@ world_kill_now :: proc(world: ^World($P, $R, $S), thing: Thing) -> bool {
 	return true
 }
 
-world_poke :: proc(world: ^World($P, $R, $S), thing: Thing) -> bool {
-	return thing_pool_poke(world.thing_pool, thing)
+world_is_alive :: proc(world: ^World($P, $R, $S), thing: Thing) -> bool {
+	return thing_pool_is_alive(world.thing_pool, thing)
 }
 
 world_count_alive :: proc(world: ^World($P, $R, $S)) -> int {
@@ -122,12 +122,6 @@ world_get_things :: proc(world: ^World($P, $R, $S), kind: P) -> []Thing {
 
 world_count_parts :: proc(world: ^World($P, $R, $S), kind: P) -> int {
 	return part_pool_count_parts(&world.part_pool, kind)
-}
-
-world_set_now :: proc {
-	world_set_value_now,
-	world_set_pointer_now,
-	world_set_zero_now,
 }
 
 world_set_value_now :: proc(
@@ -187,13 +181,7 @@ world_get_resource :: proc(world: ^World($P, $R, $S), resource: R, $T: typeid) -
 
 world_kill_later :: proc(world: ^World($P, $R, $S), thing: Thing) {
 	if thing == THING_NIL do return
-	cmd_pool_record_kill(&world.cmd_pool, thing)
-}
-
-world_set_later :: proc {
-	world_set_value_later,
-	world_set_pointer_later,
-	world_set_zero_later,
+	cmd_buffer_record_kill(&world.cmd_buffer, thing)
 }
 
 world_set_value_later :: proc(
@@ -214,9 +202,9 @@ world_set_pointer_later :: proc(world: ^World($P, $R, $S), thing: Thing, kind: P
 	if thing == THING_NIL do return
 
 	if part == nil {
-		cmd_pool_record_set_zero(&world.cmd_pool, thing, kind)
+		cmd_buffer_record_set_zero(&world.cmd_buffer, thing, kind)
 	} else {
-		cmd_pool_record_set_value(&world.cmd_pool, thing, kind, part, size_of(T))
+		cmd_buffer_record_set_value(&world.cmd_buffer, thing, kind, part, size_of(T))
 	}
 }
 
@@ -228,28 +216,28 @@ world_add_later :: proc(world: ^World($P, $R, $S), thing: Thing, kind: P) {
 	part_pool_assert_registered(&world.part_pool, kind)
 	if thing == THING_NIL do return
 
-	cmd_pool_record_set_zero(&world.cmd_pool, thing, kind)
+	cmd_buffer_record_set_zero(&world.cmd_buffer, thing, kind)
 }
 
 world_remove_later :: proc(world: ^World($P, $R, $S), thing: Thing, kind: P) {
 	part_pool_assert_registered(&world.part_pool, kind)
 	if thing == THING_NIL do return
 
-	cmd_pool_record_remove(&world.cmd_pool, thing, kind)
+	cmd_buffer_record_remove(&world.cmd_buffer, thing, kind)
 }
 
-world_count_commands :: proc(world: ^World($P, $R, $S)) -> int {
-	return len(world.cmd_pool.commands)
+world_count_cmds :: proc(world: ^World($P, $R, $S)) -> int {
+	return len(world.cmd_buffer.cmds)
 }
 
-world_apply_self :: proc(world: ^World($P, $R, $S)) {
-	apply_cmds(world, &world.cmd_pool)
-	cmd_pool_reset(&world.cmd_pool)
+world_apply :: proc(world: ^World($P, $R, $S)) {
+	apply_cmds(world, &world.cmd_buffer)
+	cmd_buffer_reset(&world.cmd_buffer)
 }
 
-world_apply_other :: proc(world: ^World($P, $R, $S), cmds: ^Cmd_Pool(P)) {
-	assert(cmds != &world.cmd_pool, "Use apply_self to apply the world's own buffer.")
-	apply_cmds(world, cmds)
+world_apply_buffer :: proc(world: ^World($P, $R, $S), buffer: ^Cmd_Buffer(P)) {
+	assert(buffer != &world.cmd_buffer, "Use world_apply to apply the world's own buffer.")
+	apply_cmds(world, buffer)
 }
 
 // >-------------------------------------------------------------- World Systems
@@ -275,11 +263,11 @@ world_run_stage_sync :: proc(world: ^World($P, $R, $S), stage: S) {
 	systems := pool.systems[stage][:]
 	if graph.system_count != len(systems) do system_graph_build(graph, systems)
 
-	system_pool_run_graph_sync(pool, stage, stuff_make(world))
-	world_apply_self(world)
+	system_pool_run_stage_sync(pool, stage, stuff_make(world))
+	world_apply(world)
 }
 
-world_run_all_sync :: proc(world: ^World($P, $R, $S)) {
+world_run_sync :: proc(world: ^World($P, $R, $S)) {
 	for stage in S do world_run_stage_sync(world, stage)
 }
 
@@ -288,7 +276,7 @@ world_run_all_sync :: proc(world: ^World($P, $R, $S)) {
 @(private = "file")
 set_raw :: proc(world: ^World($P, $R, $S), thing: Thing, kind: P, part: rawptr) -> rawptr {
 	part_pool_assert_registered(&world.part_pool, kind)
-	if !thing_pool_poke(world.thing_pool, thing) do return nil
+	if !thing_pool_is_alive(world.thing_pool, thing) do return nil
 
 	result := part_pool_set_raw(&world.part_pool, thing, kind, part)
 	archetype_pool_insert(&world.archetype_pool, thing, kind)
@@ -297,8 +285,8 @@ set_raw :: proc(world: ^World($P, $R, $S), thing: Thing, kind: P, part: rawptr) 
 }
 
 @(private = "file")
-apply_cmds :: proc(world: ^World($P, $R, $S), cmds: ^Cmd_Pool(P)) {
-	for cmd in cmds.commands {
+apply_cmds :: proc(world: ^World($P, $R, $S), buffer: ^Cmd_Buffer(P)) {
+	for cmd in buffer.cmds {
 		switch c in cmd {
 		case Cmd_Kill:
 			world_kill_now(world, c.thing)
@@ -310,7 +298,7 @@ apply_cmds :: proc(world: ^World($P, $R, $S), cmds: ^Cmd_Pool(P)) {
 				"Command part size does not match the registered part type.",
 			)
 
-			bytes := cmd_pool_get_bytes(cmds, c.offset, c.size)
+			bytes := cmd_buffer_get_bytes(buffer, c.offset, c.size)
 			set_raw(world, c.thing, c.kind, raw_data(bytes))
 
 		case Cmd_Set_Zero(P):

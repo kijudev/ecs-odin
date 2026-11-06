@@ -41,6 +41,6 @@ thing_pool_destroy :: handle_pool_destroy
 thing_pool_reset :: handle_pool_reset
 thing_pool_count_alive :: handle_pool_count_alive
 thing_pool_spawn :: handle_pool_spawn
-thing_pool_poke :: handle_pool_check
+thing_pool_is_alive :: handle_pool_is_alive
 thing_pool_kill :: handle_pool_kill
 thing_pool_kill_unchecked :: handle_pool_kill_unchecked

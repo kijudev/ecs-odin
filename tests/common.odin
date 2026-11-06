@@ -94,7 +94,7 @@ system_log_count :: proc(id: int) -> int {
 // >------------------------------------------------------------------- Typedefs
 
 Part_Pool :: ecs.Part_Pool(Part)
-Cmd_Pool :: ecs.Cmd_Pool(Part)
+Cmd_Buffer :: ecs.Cmd_Buffer(Part)
 World :: ecs.World(Part, Resource, Stage)
 System_Pool :: ecs.System_Pool(Part, Resource, Stage)
 System :: ecs.System_Info(Part, Resource, Stage)

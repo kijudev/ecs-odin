@@ -64,8 +64,7 @@ main :: proc() {
 	seed(&world)
 
 	for _ in 0 ..< 5 {
-		ecs.world_run_all_sync(&world)
-		ecs.world_apply_self(&world)
+		ecs.world_run_sync(&world)
 	}
 }
 

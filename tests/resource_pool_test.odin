@@ -25,7 +25,7 @@ resource_pool_destroy_frees_with_init_allocator :: proc(t: ^testing.T) {
 }
 
 @(test)
-resource_pool_destroy_runs_destroyers_once :: proc(t: ^testing.T) {
+resource_pool_destroy_runs_destroy_fns_once :: proc(t: ^testing.T) {
 	destroyed_resources = {}
 
 	pool: ecs.Resource_Pool(Resource)
@@ -41,7 +41,7 @@ resource_pool_destroy_runs_destroyers_once :: proc(t: ^testing.T) {
 }
 
 @(test)
-resource_pool_destroyer_sees_the_resource :: proc(t: ^testing.T) {
+resource_pool_destroy_fn_sees_the_resource :: proc(t: ^testing.T) {
 	@(static) seen: f32
 	seen = 0
 

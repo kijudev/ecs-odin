@@ -9,11 +9,11 @@ import "core:mem"
 RESOURCE_POOL_DEFAULT_CAPACITY :: 1 << 16
 
 Resource_Pool :: struct($R: typeid) where intrinsics.type_is_enum(R) {
-	resources_data:     []u8,
+	resources_data:     []byte,
 	resources_size:     int,
 	resources_capacity: int,
 	offsets:            [R]int,
-	destroyers:         [R]proc(resource: rawptr),
+	destroy_fns:         [R]proc(resource: rawptr),
 	registered:         bit_set[R],
 	types:              [R]typeid,
 	allocator:          mem.Allocator,
@@ -28,7 +28,7 @@ resource_pool_init :: proc(
 ) {
 	fmt.assertf(capacity >= 0, "Resource pool capacity cannot be negative, got %v.", capacity)
 
-	data, err := make([]u8, capacity, allocator)
+	data, err := make([]byte, capacity, allocator)
 	if err != nil do panic("Failed to allocate memory for resource pool.")
 
 	pool^ = Resource_Pool(R) {
@@ -56,7 +56,7 @@ resource_pool_register :: proc(
 	pool: ^Resource_Pool($R),
 	resource: R,
 	$T: typeid,
-	destroyer: proc(resource: rawptr) = nil,
+	destroy: proc(resource: rawptr) = nil,
 ) {
 	fmt.assertf(
 		resource not_in pool.registered,
@@ -82,7 +82,7 @@ resource_pool_register :: proc(
 	pool.resources_size = required_size
 	pool.offsets[resource] = offset
 	pool.types[resource] = T
-	pool.destroyers[resource] = destroyer
+	pool.destroy_fns[resource] = destroy
 	pool.registered += {resource}
 }
 
@@ -132,8 +132,8 @@ resource_pool_get :: proc(pool: ^Resource_Pool($R), resource: R, $T: typeid) -> 
 @(private = "file")
 destroy_all :: proc(pool: ^Resource_Pool($R)) {
 	for resource in pool.registered {
-		destroyer := pool.destroyers[resource]
-		if destroyer != nil do destroyer(get_raw(pool, resource))
+		destroy := pool.destroy_fns[resource]
+		if destroy != nil do destroy(get_raw(pool, resource))
 	}
 }
 

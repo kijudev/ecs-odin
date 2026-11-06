@@ -75,7 +75,7 @@ part_set_insert_copies_part :: proc(t: ^testing.T) {
 	ecs.part_set_insert(&set, thing, &value)
 	value = {}
 
-	part := (^Position)(ecs.part_set_get_part(&set, thing))
+	part := (^Position)(ecs.part_set_get(&set, thing))
 	testing.expect(t, part != nil)
 	testing.expect_value(t, part^, Position{1, 2})
 	testing.expect_value(t, set.parts_size, 1)
@@ -119,7 +119,7 @@ part_set_insert_existing_overwrites :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, destroyed_count, 1)
 	testing.expect_value(t, set.parts_size, 1)
-	testing.expect_value(t, (^Position)(ecs.part_set_get_part(&set, thing))^, second)
+	testing.expect_value(t, (^Position)(ecs.part_set_get(&set, thing))^, second)
 }
 
 @(test)
@@ -142,7 +142,7 @@ part_set_insert_grows_capacity :: proc(t: ^testing.T) {
 	testing.expect(t, set.parts_capacity >= len(spawned))
 
 	for thing, i in spawned {
-		part := (^Position)(ecs.part_set_get_part(&set, thing))
+		part := (^Position)(ecs.part_set_get(&set, thing))
 		testing.expect_value(t, part^, Position{f32(i), f32(-i)})
 	}
 }
@@ -163,9 +163,9 @@ part_set_insert_from_own_part_survives_growth :: proc(t: ^testing.T) {
 
 	// Capacity is 1 here, so this insert reallocates the data `get` points into.
 	testing.expect_value(t, set.parts_capacity, 1)
-	ecs.part_set_insert(&set, b, ecs.part_set_get_part(&set, a))
+	ecs.part_set_insert(&set, b, ecs.part_set_get(&set, a))
 
-	testing.expect_value(t, (^Position)(ecs.part_set_get_part(&set, b))^, value)
+	testing.expect_value(t, (^Position)(ecs.part_set_get(&set, b))^, value)
 }
 
 @(test)
@@ -183,9 +183,9 @@ part_set_insert_across_pages :: proc(t: ^testing.T) {
 	ecs.part_set_insert(&set, high, &values[1])
 	ecs.part_set_insert(&set, last, &values[2])
 
-	testing.expect_value(t, (^Position)(ecs.part_set_get_part(&set, low))^, values[0])
-	testing.expect_value(t, (^Position)(ecs.part_set_get_part(&set, high))^, values[1])
-	testing.expect_value(t, (^Position)(ecs.part_set_get_part(&set, last))^, values[2])
+	testing.expect_value(t, (^Position)(ecs.part_set_get(&set, low))^, values[0])
+	testing.expect_value(t, (^Position)(ecs.part_set_get(&set, high))^, values[1])
+	testing.expect_value(t, (^Position)(ecs.part_set_get(&set, last))^, values[2])
 }
 
 @(test)
@@ -218,8 +218,8 @@ part_set_get_missing_returns_nil :: proc(t: ^testing.T) {
 	b := ecs.thing_pool_spawn(&things)
 	ecs.part_set_insert(&set, a)
 
-	testing.expect(t, ecs.part_set_get_part(&set, b) == nil)
-	testing.expect(t, ecs.part_set_get_part(&set, ecs.THING_NIL) == nil)
+	testing.expect(t, ecs.part_set_get(&set, b) == nil)
+	testing.expect(t, ecs.part_set_get(&set, ecs.THING_NIL) == nil)
 	testing.expect(t, !ecs.part_set_has(&set, b))
 	testing.expect(t, !ecs.part_set_has(&set, ecs.THING_NIL))
 }
@@ -239,7 +239,7 @@ part_set_stale_thing_does_not_see_part :: proc(t: ^testing.T) {
 	ecs.part_set_insert(&set, new)
 
 	testing.expect_value(t, old.idx, new.idx)
-	testing.expect(t, ecs.part_set_get_part(&set, old) == nil)
+	testing.expect(t, ecs.part_set_get(&set, old) == nil)
 	testing.expect(t, !ecs.part_set_remove(&set, old))
 	testing.expect(t, ecs.part_set_has(&set, new))
 }
@@ -291,14 +291,14 @@ part_set_remove_keeps_other_parts :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.part_set_has(&set, spawned[0]))
 
 	for thing, i in spawned[1:] {
-		part := (^Position)(ecs.part_set_get_part(&set, thing))
+		part := (^Position)(ecs.part_set_get(&set, thing))
 		testing.expect_value(t, part^, Position{f32(i + 1), 0})
 	}
 
 	// Removing the last part needs no move.
 	testing.expect(t, ecs.part_set_remove(&set, spawned[2]))
-	testing.expect_value(t, (^Position)(ecs.part_set_get_part(&set, spawned[1]))^, Position{1, 0})
-	testing.expect_value(t, (^Position)(ecs.part_set_get_part(&set, spawned[3]))^, Position{3, 0})
+	testing.expect_value(t, (^Position)(ecs.part_set_get(&set, spawned[1]))^, Position{1, 0})
+	testing.expect_value(t, (^Position)(ecs.part_set_get(&set, spawned[3]))^, Position{3, 0})
 }
 
 @(test)
@@ -338,11 +338,11 @@ part_set_supports_zero_sized_parts :: proc(t: ^testing.T) {
 	ecs.part_set_insert(&set, a)
 	ecs.part_set_insert(&set, b)
 
-	testing.expect(t, ecs.part_set_get_part(&set, a) != nil)
+	testing.expect(t, ecs.part_set_get(&set, a) != nil)
 	testing.expect(t, ecs.part_set_has(&set, b))
 	testing.expect_value(t, set.parts_size, 2)
 
 	testing.expect(t, ecs.part_set_remove(&set, a))
-	testing.expect(t, ecs.part_set_get_part(&set, a) == nil)
+	testing.expect(t, ecs.part_set_get(&set, a) == nil)
 	testing.expect(t, ecs.part_set_has(&set, b))
 }

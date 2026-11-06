@@ -52,7 +52,7 @@ capacity. See [Handles](#handles) for the pool design.
 ## Part Set
 
 `Part_Set` stores one part type as a paged sparse set. It is type-erased: it only knows the part's
-size and alignment (from `^runtime.Type_Info`) and an optional `destroy_part` callback.
+size and alignment (from `^runtime.Type_Info`) and an optional `destroy` callback.
 
 - `indices` - an `Inline_Paged_Array` with `PART_SET_PAGE_COUNT` pages mapping a thing idx to
   dense idx + 1. `0` means no part, so a missing or freshly zeroed page is empty.
@@ -60,7 +60,7 @@ size and alignment (from `^runtime.Type_Info`) and an optional `destroy_part` ca
   last part into the hole and updates its sparse entry, so parts stay packed for iteration.
 
 Lookups take a full `Thing` and compare it with the dense owner, so a stale thing never sees the part
-of a reused idx. Inserting for a thing that already has the part overwrites it (`destroy_part` runs
+of a reused idx. Inserting for a thing that already has the part overwrites it (`destroy` runs
 on the old value). Inserting with a nil part zero-initialises it. Zero-sized parts (tags) store no data;
 `get_part` returns a shared non-nil pointer for them.
 
@@ -90,7 +90,7 @@ time, input, config. The values are packed into one buffer of a fixed capacity, 
 behind the previous one, aligned for its type, and panics when it doesn't fit anymore.
 
 A resource starts zeroed and is changed through the pointer from `get`. `reset` runs the
-destroyers and zeroes every resource but keeps the registrations; `destroy` runs the destroyers
+`destroy` callbacks and zeroes every resource but keeps the registrations; `destroy` runs them
 and frees the buffer.
 
 # Archetypes
@@ -105,18 +105,18 @@ thing is alive.
 
 # Commands
 
-`Cmd_Pool($P)` records deferred mutations as a `Cmd($P)` union (`Cmd_Kill`, `Cmd_Set_Value`,
+`Cmd_Buffer($P)` records deferred mutations as a `Cmd($P)` union (`Cmd_Kill`, `Cmd_Set_Value`,
 `Cmd_Set_Zero`, `Cmd_Remove`) in record order. It only stores commands; applying them is up to the caller.
 
 Part values are copied into a single `parts` byte buffer, packed without padding. `Cmd_Set_Value`
-keeps the `offset` and `size` of its bytes. `cmd_pool_get_bytes` returns them as a slice, valid until
-the next record, and `cmd_pool_get_part` copies them out as a `T`. No `^T` is handed out because a
+keeps the `offset` and `size` of its bytes. `cmd_buffer_get_bytes` returns them as a slice, valid until
+the next record, and `cmd_buffer_get_part` copies them out as a `T`. No `^T` is handed out because a
 packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buffer is capped at
-`CMD_POOL_MAX_PARTS_SIZE` bytes.
+`CMD_BUFFER_MAX_PARTS_SIZE` bytes.
 
 # World
 
-`World($P, $R, $S)` owns a `Thing_Pool`, a `Part_Pool(P)`, an `Archetype_Pool(P)`, a `Cmd_Pool(P)`,
+`World($P, $R, $S)` owns a `Thing_Pool`, a `Part_Pool(P)`, an `Archetype_Pool(P)`, a `Cmd_Buffer(P)`,
 a `Resource_Pool(R)` and a `System_Pool(P, R, S)`, all allocated with the one `pool_allocator`
 passed to `world_init`. `S` is the enum of system stages. A world without resources passes an empty enum for `R`.
 
@@ -128,10 +128,10 @@ Mutations come in two flavours:
 - `_now` (`set_now`, `add_now`, `remove_now`, `kill_now`) apply immediately and report failure for
   dead things by returning `nil`/`false`.
 - `_later` (`set_later`, `add_later`, `remove_later`, `kill_later`) record into the world's own
-  `Cmd_Pool`. Kind and type are asserted when recording; liveness is checked when applying, so
+  `Cmd_Buffer`. Kind and type are asserted when recording; liveness is checked when applying, so
   commands for things that are dead by then are skipped. `THING_NIL` is never recorded.
 
-`apply_self` applies the world's buffer in record order and resets it. `apply_other` applies a
+`world_apply` applies the world's buffer in record order and resets it. `world_apply_buffer` applies a
 buffer recorded elsewhere and leaves it untouched; the caller resets it, and may replay it into
 several worlds. `world_reset` drops unapplied commands, kills every thing and zeroes every
 resource, keeping all registrations.
@@ -143,9 +143,9 @@ buffer twice hands the same resources to two parts.
 `spawn` has no `_later` variant: the thing is needed right away to record commands for it.
 
 Systems are `proc(stuff: Stuff(P, R, S))`, scheduled with `world_schedule` into a stage with the
-part kinds they read and write. `world_run_stage` runs one stage and then applies the commands its
-systems recorded with `apply_self`, so `_later` changes become visible to the next stage.
-`world_run` runs every stage in the order of `S`. The stage graph is rebuilt on the next run
+part kinds they read and write. `world_run_stage_sync` runs one stage and then applies the commands its
+systems recorded with `world_apply`, so `_later` changes become visible to the next stage.
+`world_run_sync` runs every stage in the order of `S`. The stage graph is rebuilt on the next run
 whenever systems were scheduled since the last build. Everything runs on one thread for now.
 `world_reset` keeps the scheduled systems.
 
@@ -154,9 +154,9 @@ whenever systems were scheduled since the last build. Everything runs on one thr
 `Stuff($P, $R, $S)` is what a system gets. It forwards to its world, but only for things, parts
 and resources: it cannot register kinds, apply commands or init/destroy/reset the world.
 
-`Query($P, $R, $S)` iterates the things that have every kind of `with` and none of `without`.
-`with` cannot be empty and cannot share a kind with `without`. It walks the smallest part set of
-`with`, picked in `query_make` and again in `query_refresh`, which also starts the iteration over.
+`Query($P, $R, $S)` iterates the things that have every kind of `include` and none of `exclude`.
+`include` cannot be empty and cannot share a kind with `exclude`. It walks the smallest part set of
+`include`, picked in `query_make` and again in `query_refresh`, which also starts the iteration over.
 `query.thing` is the current thing (nil once `query_next` returns false), and `query_has` and
 `query_get_part` read it.
 
