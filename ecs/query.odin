@@ -73,6 +73,10 @@ query_get_part :: proc(query: ^Query($P, $R, $S), kind: P, $T: typeid) -> ^T {
 	return world_get_part(query.stuff.world, query.thing, kind, T)
 }
 
+query_get_thing :: proc(query: ^Query($P, $R, $S)) -> Thing {
+	return query.thing
+}
+
 // >------------------------------------------------------------------ Internals
 
 @(private = "file")

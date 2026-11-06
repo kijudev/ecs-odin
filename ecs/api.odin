@@ -39,6 +39,10 @@ count_free :: proc {
 	stuff_count_free,
 }
 
+get_thing :: proc {
+	query_get_thing,
+}
+
 // >---------------------------------------------------------------------- Parts
 
 has :: proc {

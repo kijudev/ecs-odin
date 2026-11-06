@@ -48,7 +48,7 @@ main :: proc() {
 	query := ecs.query_make(stuff, {.Position, .Velocity}, {.Health})
 
 	for ecs.query_next(&query) {
-		thing := query.thing
+		thing := ecs.get_thing(&query)
 		pos := ecs.get_part(&query, .Position, Position)
 		vel := ecs.get_part(&query, .Velocity, Velocity)
 
