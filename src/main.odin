@@ -17,6 +17,8 @@ Kind :: enum {
 	Gravity,
 }
 
+Kinds :: bit_set[Kind]
+
 // >---------------------------------------------------------------------- Parts
 
 Position :: struct {

@@ -7,12 +7,12 @@ import "core:fmt"
 
 Query :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
-	stuff:      Stuff(K, S),
-	include:    Archetype(K),
-	exclude:    Archetype(K),
-	first_kind: K,
-	thing:      Thing,
-	iter_pos:   int,
+	stuff:   Stuff(K, S),
+	include: Archetype(K),
+	exclude: Archetype(K),
+	first:   K,
+	thing:   Thing,
+	pos:     int,
 }
 
 // >---------------------------------------------------------------------- Query
@@ -34,18 +34,18 @@ query_make :: proc(stuff: Stuff($K, $S), include: bit_set[K], exclude: bit_set[K
 }
 
 query_refresh :: proc(query: ^Query($K, $S)) {
-	query.first_kind = find_first_kind(query)
+	query.first = find_first_kind(query)
 	query.thing = {}
-	query.iter_pos = 0
+	query.pos = 0
 }
 
 query_next :: proc(query: ^Query($K, $S)) -> bool {
 	world := query.stuff.world
-	things := part_pool_get_things(&world.part_pool, query.first_kind)
+	things := part_pool_get_things(&world.part_pool, query.first)
 
-	for query.iter_pos < len(things) {
-		thing := things[query.iter_pos]
-		query.iter_pos += 1
+	for query.pos < len(things) {
+		thing := things[query.pos]
+		query.pos += 1
 		archetype := archetype_pool_get(world.archetype_pool, thing)
 
 		if satisfies(archetype, query.include, query.exclude) {
@@ -65,7 +65,14 @@ query_has :: proc(query: ^Query($K, $S), kind: K) -> bool {
 }
 
 query_get_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
-	return world_get_part(query.stuff.world, query.thing, kind, T)
+	fmt.assertf(
+		query_has(query, kind),
+		"Query does not have part %v for thing %v.",
+		kind,
+		query.thing,
+	)
+
+	return part_pool_get_unchecked(&query.stuff.world.part_pool, query.thing, kind, T)
 }
 
 query_get_thing :: proc(query: ^Query($K, $S)) -> Thing {

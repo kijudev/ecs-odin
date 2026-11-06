@@ -19,7 +19,6 @@ Part_Idx :: u32
 Part_Set_Indices :: Inline_Paged_Array(Part_Idx, PART_SET_PAGE_COUNT, PART_SET_PAGE_SIZE)
 
 Part_Set :: struct {
-	part_info:      ^runtime.Type_Info,
 	part_size:      int,
 	part_align:     int,
 	indices:        Part_Set_Indices,
@@ -27,7 +26,7 @@ Part_Set :: struct {
 	parts_data:     []byte,
 	parts_capacity: int,
 	parts_size:     int,
-	destroy:   proc(part: rawptr),
+	destroy_proc:   proc(part: rawptr),
 	allocator:      mem.Allocator,
 }
 
@@ -52,7 +51,6 @@ part_set_init :: proc(
 	assert(part_info != nil, "Part set needs the part type info.")
 
 	set^ = Part_Set {
-		part_info      = part_info,
 		part_size      = part_info.size,
 		part_align     = part_info.align,
 		indices        = {},
@@ -60,7 +58,7 @@ part_set_init :: proc(
 		parts_data     = nil,
 		parts_capacity = 0,
 		parts_size     = 0,
-		destroy   = destroy,
+		destroy_proc   = destroy,
 		allocator      = allocator,
 	}
 
@@ -110,7 +108,7 @@ part_set_insert :: proc(set: ^Part_Set, thing: Thing, part: rawptr = nil) -> raw
 	result := parts_get_unchecked(set, idx)
 	if result == part do return result
 
-	if set.destroy != nil do set.destroy(result)
+	if set.destroy_proc != nil do set.destroy_proc(result)
 	parts_write(set, result, part)
 
 	return result
@@ -338,11 +336,11 @@ dense_idx_unchecked :: proc(set: ^Part_Set, thing: Thing) -> int {
 
 @(private = "file")
 parts_destroy_all :: proc(set: ^Part_Set) {
-	if set.destroy == nil do return
+	if set.destroy_proc == nil do return
 
 	for i in 0 ..< set.parts_size {
 		part := parts_get_unchecked(set, i)
-		set.destroy(part)
+		set.destroy_proc(part)
 	}
 }
 
@@ -353,7 +351,7 @@ parts_remove_swap :: proc(set: ^Part_Set, target_idx: int) {
 	target := parts_get_unchecked(set, target_idx)
 	last := parts_get_unchecked(set, last_idx)
 
-	if set.destroy != nil do set.destroy(target)
+	if set.destroy_proc != nil do set.destroy_proc(target)
 	if target_idx != last_idx do mem.copy(target, last, set.part_size)
 
 	set.parts_size -= 1
