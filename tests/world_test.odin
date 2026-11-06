@@ -643,6 +643,115 @@ destroy_runs_resource_destroyers :: proc(t: ^testing.T) {
 	testing.expect_value(t, destroyed_resources[.Time], 1)
 }
 
+// >-------------------------------------------------------------------- Systems
+
+// The thing the command systems below work on.
+@(private = "file", thread_local)
+system_target: ecs.Thing
+
+@(private = "file")
+tag_later_system :: proc(stuff: Stuff) {
+	append(&system_log, 10)
+	ecs.add_later(stuff, system_target, .Tag)
+}
+
+@(private = "file")
+check_tag_system :: proc(stuff: Stuff) {
+	append(&system_log, ecs.has(stuff, system_target, .Tag) ? 11 : 12)
+}
+
+@(test)
+run_goes_through_stages_in_order :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	// Scheduled out of stage order on purpose.
+	ecs.world_schedule(&world, system_c, .Render, {}, {})
+	ecs.world_schedule(&world, system_a, .Update, {}, {.Position})
+	ecs.world_schedule(&world, system_b, .Update, {.Position}, {})
+	testing.expect_value(t, ecs.world_count_systems(&world), 3)
+
+	clear(&system_log)
+	ecs.world_run_all_sync(&world)
+
+	testing.expect_value(t, len(system_log), 3)
+	testing.expect(t, system_log_index(0) < system_log_index(1))
+	testing.expect(t, system_log_index(1) < system_log_index(2))
+}
+
+@(test)
+run_stage_runs_only_that_stage :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	ecs.world_schedule(&world, system_a, .Update, {}, {})
+	ecs.world_schedule(&world, system_b, .Render, {}, {})
+
+	clear(&system_log)
+	ecs.world_run_stage_sync(&world, .Render)
+
+	testing.expect_value(t, len(system_log), 1)
+	testing.expect_value(t, system_log_count(1), 1)
+}
+
+@(test)
+run_stage_applies_commands_after_the_stage :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	system_target = ecs.world_spawn(&world)
+	ecs.world_schedule(&world, tag_later_system, .Update, {}, {.Tag})
+	ecs.world_schedule(&world, check_tag_system, .Update, {.Tag}, {})
+	ecs.world_schedule(&world, check_tag_system, .Render, {.Tag}, {})
+
+	clear(&system_log)
+	ecs.world_run_all_sync(&world)
+
+	// Not applied yet within Update, applied by the time Render runs.
+	testing.expect_value(t, len(system_log), 3)
+	testing.expect_value(t, system_log_count(10), 1)
+	testing.expect_value(t, system_log_count(11), 1)
+	testing.expect_value(t, system_log_count(12), 1)
+	testing.expect(t, system_log_index(12) < system_log_index(11))
+	testing.expect_value(t, ecs.world_count_commands(&world), 0)
+	testing.expect(t, ecs.world_has(&world, system_target, .Tag))
+}
+
+@(test)
+schedule_after_run_rebuilds_the_graph :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	ecs.world_schedule(&world, system_a, .Update, {}, {.Position})
+	ecs.world_run_all_sync(&world)
+
+	ecs.world_schedule(&world, system_b, .Update, {.Position}, {})
+	clear(&system_log)
+	ecs.world_run_all_sync(&world)
+
+	testing.expect_value(t, len(system_log), 2)
+	testing.expect(t, system_log_index(0) < system_log_index(1))
+}
+
+@(test)
+reset_keeps_scheduled_systems :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	ecs.world_schedule(&world, system_a, .Update, {}, {})
+	ecs.world_reset(&world)
+	testing.expect_value(t, ecs.world_count_systems(&world), 1)
+
+	clear(&system_log)
+	ecs.world_run_all_sync(&world)
+	testing.expect_value(t, system_log_count(0), 1)
+}
+
 // >-------------------------------------------------------------------- Asserts
 
 @(test)
@@ -651,7 +760,7 @@ set_later_wrong_type_asserts_when_recording :: proc(t: ^testing.T) {
 	when ODIN_DISABLE_ASSERT do return
 
 	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
-	backing: [1 << 16]byte
+	@(static) backing: [512 * mem.Kilobyte]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
 
@@ -671,7 +780,7 @@ get_resource_wrong_type_asserts :: proc(t: ^testing.T) {
 	when ODIN_DISABLE_ASSERT do return
 
 	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
-	backing: [1 << 16]byte
+	@(static) backing: [512 * mem.Kilobyte]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
 
@@ -690,7 +799,7 @@ get_resource_unregistered_asserts :: proc(t: ^testing.T) {
 	when ODIN_DISABLE_ASSERT do return
 
 	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
-	backing: [1 << 16]byte
+	@(static) backing: [512 * mem.Kilobyte]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
 

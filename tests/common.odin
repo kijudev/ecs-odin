@@ -74,10 +74,10 @@ Stage :: enum {
 @(thread_local)
 system_log: [dynamic; 64]int
 
-system_a :: proc(stuff: ^Stuff) {append(&system_log, 0)}
-system_b :: proc(stuff: ^Stuff) {append(&system_log, 1)}
-system_c :: proc(stuff: ^Stuff) {append(&system_log, 2)}
-system_d :: proc(stuff: ^Stuff) {append(&system_log, 3)}
+system_a :: proc(stuff: Stuff) {append(&system_log, 0)}
+system_b :: proc(stuff: Stuff) {append(&system_log, 1)}
+system_c :: proc(stuff: Stuff) {append(&system_log, 2)}
+system_d :: proc(stuff: Stuff) {append(&system_log, 3)}
 
 // Position of a system id in the log, or -1 if it never ran.
 system_log_index :: proc(id: int) -> int {

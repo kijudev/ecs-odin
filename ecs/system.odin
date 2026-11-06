@@ -9,7 +9,7 @@ import "core:mem"
 System_Info :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enum(P),
 	intrinsics.type_is_enum(R),
 	intrinsics.type_is_enum(S) {
-	system: proc(c: ^Stuff(P, R, S)),
+	system: proc(stuff: Stuff(P, R, S)),
 	reads:  bit_set[P],
 	writes: bit_set[P],
 	stage:  S,
@@ -73,7 +73,7 @@ system_pool_reset :: proc(pool: ^System_Pool($P, $R, $S)) {
 
 system_pool_schedule :: proc(
 	pool: ^System_Pool($P, $R, $S),
-	system: proc(stuff: ^Stuff(P, R, S)),
+	system: proc(stuff: Stuff(P, R, S)),
 	stage: S,
 	reads: bit_set[P],
 	writes: bit_set[P],
@@ -112,7 +112,7 @@ system_pool_build_graphs :: proc(pool: ^System_Pool($P, $R, $S)) {
 system_pool_run_graph_sync :: proc(
 	pool: ^System_Pool($P, $R, $S),
 	stage: S,
-	stuff: ^Stuff(P, R, S),
+	stuff: Stuff(P, R, S),
 ) -> int {
 	graph := pool.graphs[stage]
 	systems := pool.systems[stage][:]

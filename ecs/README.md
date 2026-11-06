@@ -116,9 +116,9 @@ packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buf
 
 # World
 
-`World($P, $R, $S)` owns a `Thing_Pool`, a `Part_Pool(P)`, an `Archetype_Pool(P)`, a `Cmd_Pool(P)`
-and a `Resource_Pool(R)`, all allocated with the one `pool_allocator` passed to `world_init`. `S`
-is the enum of system stages. A world without resources passes an empty enum for `R`.
+`World($P, $R, $S)` owns a `Thing_Pool`, a `Part_Pool(P)`, an `Archetype_Pool(P)`, a `Cmd_Pool(P)`,
+a `Resource_Pool(R)` and a `System_Pool(P, R, S)`, all allocated with the one `pool_allocator`
+passed to `world_init`. `S` is the enum of system stages. A world without resources passes an empty enum for `R`.
 
 Resources are reached with `register_resource`, `is_resource_registered` and `get_resource`. They
 have no `_now`/`_later` variants, nothing about them is deferred.
@@ -141,6 +141,13 @@ resetting a buffer that was never applied leaks resources owned by its parts, an
 buffer twice hands the same resources to two parts.
 
 `spawn` has no `_later` variant: the thing is needed right away to record commands for it.
+
+Systems are `proc(stuff: Stuff(P, R, S))`, scheduled with `world_schedule` into a stage with the
+part kinds they read and write. `world_run_stage` runs one stage and then applies the commands its
+systems recorded with `apply_self`, so `_later` changes become visible to the next stage.
+`world_run` runs every stage in the order of `S`. The stage graph is rebuilt on the next run
+whenever systems were scheduled since the last build. Everything runs on one thread for now.
+`world_reset` keeps the scheduled systems.
 
 # Stuff and Queries
 

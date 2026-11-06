@@ -14,6 +14,7 @@ World :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enu
 	cmd_pool:       Cmd_Pool(P),
 	part_pool:      Part_Pool(P),
 	resource_pool:  Resource_Pool(R),
+	system_pool:    System_Pool(P, R, S),
 	pool_allocator: mem.Allocator,
 }
 
@@ -33,6 +34,7 @@ world_init :: proc(
 	cmd_pool_init(&world.cmd_pool, allocator = world.pool_allocator)
 	part_pool_init(&world.part_pool, world.pool_allocator)
 	resource_pool_init(&world.resource_pool, resource_capacity, world.pool_allocator)
+	system_pool_init(&world.system_pool, world.pool_allocator)
 }
 
 world_destroy :: proc(world: ^World($P, $R, $S)) {
@@ -41,12 +43,13 @@ world_destroy :: proc(world: ^World($P, $R, $S)) {
 	cmd_pool_destroy(&world.cmd_pool)
 	part_pool_destroy(&world.part_pool)
 	resource_pool_destroy(&world.resource_pool)
+	system_pool_destroy(&world.system_pool)
 
 	world^ = World(P, R, S){}
 }
 
 // Kills every thing, zeroes every resource and drops the commands recorded with the `_later`
-// procs without applying them. Registrations are kept.
+// procs without applying them. Registrations and scheduled systems are kept.
 world_reset :: proc(world: ^World($P, $R, $S)) {
 	thing_pool_reset(&world.thing_pool)
 	archetype_pool_reset(&world.archetype_pool)
@@ -247,6 +250,37 @@ world_apply_self :: proc(world: ^World($P, $R, $S)) {
 world_apply_other :: proc(world: ^World($P, $R, $S), cmds: ^Cmd_Pool(P)) {
 	assert(cmds != &world.cmd_pool, "Use apply_self to apply the world's own buffer.")
 	apply_cmds(world, cmds)
+}
+
+// >-------------------------------------------------------------- World Systems
+
+world_schedule :: proc(
+	world: ^World($P, $R, $S),
+	system: proc(stuff: Stuff(P, R, S)),
+	stage: S,
+	reads: bit_set[P],
+	writes: bit_set[P],
+) {
+	system_pool_schedule(&world.system_pool, system, stage, reads, writes)
+}
+
+world_count_systems :: proc(world: ^World($P, $R, $S)) -> int {
+	return system_pool_count_systems(&world.system_pool)
+}
+
+world_run_stage_sync :: proc(world: ^World($P, $R, $S), stage: S) {
+	pool := &world.system_pool
+
+	graph := pool.graphs[stage]
+	systems := pool.systems[stage][:]
+	if graph.system_count != len(systems) do system_graph_build(graph, systems)
+
+	system_pool_run_graph_sync(pool, stage, stuff_make(world))
+	world_apply_self(world)
+}
+
+world_run_all_sync :: proc(world: ^World($P, $R, $S)) {
+	for stage in S do world_run_stage_sync(world, stage)
 }
 
 // >------------------------------------------------------------------ Internals

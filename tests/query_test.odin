@@ -194,7 +194,7 @@ query_with_nothing_asserts :: proc(t: ^testing.T) {
 	when ODIN_DISABLE_ASSERT do return
 
 	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
-	backing: [1 << 16]byte
+	@(static) backing: [512 * mem.Kilobyte]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
 
@@ -212,14 +212,17 @@ query_conflicting_parts_asserts :: proc(t: ^testing.T) {
 	when ODIN_DISABLE_ASSERT do return
 
 	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
-	backing: [1 << 16]byte
+	@(static) backing: [512 * mem.Kilobyte]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
 
 	world: World
 	make_world(&world, mem.arena_allocator(&arena))
 
-	testing.expect_assert_message(t, "Query has conflicting parts: Velocity is in both with and without.")
+	testing.expect_assert_message(
+		t,
+		"Query has conflicting parts: Velocity is in both with and without.",
+	)
 	ecs.query_make(ecs.stuff_make(&world), {.Position, .Velocity}, {.Velocity, .Tag})
 	testing.fail_now(t, "The call did not assert.")
 }
@@ -230,7 +233,7 @@ query_unregistered_part_asserts :: proc(t: ^testing.T) {
 	when ODIN_DISABLE_ASSERT do return
 
 	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
-	backing: [1 << 16]byte
+	@(static) backing: [512 * mem.Kilobyte]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])
 

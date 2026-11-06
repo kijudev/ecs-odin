@@ -102,7 +102,7 @@ system_pool_usable_after_reset :: proc(t: ^testing.T) {
 
 	clear(&system_log)
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 1)
+	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 1)
 	testing.expect_value(t, len(system_log), 1)
 	testing.expect_value(t, system_log_count(1), 1)
 }
@@ -242,7 +242,7 @@ system_pool_run_graph_sync_runs_each_system_once :: proc(t: ^testing.T) {
 
 	clear(&system_log)
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 3)
+	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 3)
 
 	testing.expect_value(t, len(system_log), 3)
 	for id in 0 ..< 3 do testing.expect_value(t, system_log_count(id), 1)
@@ -264,7 +264,7 @@ system_pool_run_graph_sync_respects_conflicts :: proc(t: ^testing.T) {
 
 	clear(&system_log)
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 4)
+	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 4)
 
 	testing.expect(t, system_log_index(0) < system_log_index(1), "a before b")
 	testing.expect(t, system_log_index(1) < system_log_index(2), "b before c")
@@ -283,8 +283,8 @@ system_pool_run_graph_sync_can_run_again :: proc(t: ^testing.T) {
 
 	clear(&system_log)
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 2)
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 2)
+	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 2)
+	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 2)
 
 	testing.expect_value(t, len(system_log), 4)
 	testing.expect_value(t, system_log[2], 0)
@@ -300,7 +300,7 @@ system_pool_run_graph_sync_empty_stage :: proc(t: ^testing.T) {
 	ecs.system_pool_build_graphs(&pool)
 
 	stuff: Stuff
-	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, &stuff), 0)
+	testing.expect_value(t, ecs.system_pool_run_graph_sync(&pool, .Update, stuff), 0)
 }
 
 // >------------------------------------------------------------------- Failures
@@ -361,6 +361,7 @@ system_pool_run_graph_sync_asserts_on_stale_graph :: proc(t: ^testing.T) {
 		t,
 		"System graph for stage Update is stale, it was built for 1 systems but there are 2.",
 	)
-	ecs.system_pool_run_graph_sync(&pool, .Update, &stuff)
+
+	ecs.system_pool_run_graph_sync(&pool, .Update, stuff)
 	testing.fail_now(t, "The call did not assert.")
 }
