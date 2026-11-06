@@ -82,14 +82,6 @@ part_set_reset :: proc(set: ^Part_Set) {
 	set.parts_size = 0
 }
 
-part_set_count_parts :: proc(set: ^Part_Set) -> int {
-	return set.parts_size
-}
-
-part_set_capacity :: proc(set: ^Part_Set) -> int {
-	return set.parts_capacity
-}
-
 part_set_has :: proc(set: ^Part_Set, thing: Thing) -> bool {
 	_, ok := dense_idx(set, thing)
 	return ok
@@ -227,7 +219,7 @@ part_pool_assert_type :: proc(pool: ^Part_Pool($P), kind: P, $T: typeid, loc := 
 
 part_pool_count_parts :: proc(pool: ^Part_Pool($P), kind: P) -> int {
 	part_pool_assert_registered(pool, kind)
-	return part_set_count_parts(&pool.sets[kind])
+	return pool.sets[kind].parts_size
 }
 
 part_pool_has :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P) -> bool {
@@ -251,7 +243,7 @@ part_pool_get_parts :: proc(pool: ^Part_Pool($P), kind: P, $T: typeid) -> []T {
 	part_pool_assert_type(pool, kind, T)
 
 	set := &pool.sets[kind]
-	return ([^]T)(raw_data(set.parts_data))[:part_set_count_parts(set)]
+	return ([^]T)(raw_data(set.parts_data))[:set.parts_size]
 }
 
 part_pool_get_things :: proc(pool: ^Part_Pool($P), kind: P) -> []Thing {
@@ -375,7 +367,7 @@ parts_append :: proc(set: ^Part_Set, part: rawptr) -> rawptr {
 		part != nil && uintptr(part) >= data && uintptr(part) < data + uintptr(len(set.parts_data))
 	offset := uintptr(part) - data
 
-	result := parts_alloc(set)
+	result := parts_allocate(set)
 
 	src := part
 	if in_pool do src = rawptr(uintptr(raw_data(set.parts_data)) + offset)
@@ -385,7 +377,7 @@ parts_append :: proc(set: ^Part_Set, part: rawptr) -> rawptr {
 }
 
 @(private = "file")
-parts_alloc :: proc(set: ^Part_Set) -> rawptr {
+parts_allocate :: proc(set: ^Part_Set) -> rawptr {
 	parts_ensure_capacity(set, set.parts_size + 1)
 
 	part := parts_get_unchecked(set, set.parts_size)

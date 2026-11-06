@@ -103,13 +103,6 @@ system_pool_count_systems :: proc(pool: ^System_Pool($P, $R, $S)) -> int {
 	return count
 }
 
-system_pool_get_systems :: proc(
-	pool: ^System_Pool($P, $R, $S),
-	stage: S,
-) -> []System_Info(P, R, S) {
-	return pool.systems[stage][:]
-}
-
 system_pool_build_graphs :: proc(pool: ^System_Pool($P, $R, $S)) {
 	for stage in S {
 		system_graph_build(pool.graphs[stage], pool.systems[stage][:])

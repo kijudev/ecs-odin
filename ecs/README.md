@@ -93,6 +93,16 @@ A resource starts zeroed and is changed through the pointer from `get`. `reset` 
 destroyers and zeroes every resource but keeps the registrations; `destroy` runs the destroyers
 and frees the buffer.
 
+# Archetypes
+
+`Archetype($P)` is the set of part kinds a thing has. It is a `bit_set[P]` underneath, but only
+the `archetype_*` procs touch it: `has`, `insert`, `remove`, `clear`, `is_empty`, `contains`
+(every kind of the other one is in it), `is_disjoint` and `intersect`. Iterate it with
+`it := archetype_iter_make(a)` and `for kind in archetype_iter_next(&it)`.
+
+`Archetype_Pool($P)` keeps one `Archetype` per thing idx. Like the part pool it doesn't know if a
+thing is alive.
+
 # Commands
 
 `Cmd_Pool($P)` records deferred mutations as a `Cmd($P)` union (`Cmd_Kill`, `Cmd_Set_Value`,
@@ -106,9 +116,9 @@ packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buf
 
 # World
 
-`World($P, $R)` owns a `Thing_Pool`, a `Part_Pool(P)`, an `Archetype_Pool(P)`, a `Cmd_Pool(P)` and
-a `Resource_Pool(R)`, all allocated with the one `pool_allocator` passed to `world_init`. A world
-without resources passes an empty enum for `R`.
+`World($P, $R, $S)` owns a `Thing_Pool`, a `Part_Pool(P)`, an `Archetype_Pool(P)`, a `Cmd_Pool(P)`
+and a `Resource_Pool(R)`, all allocated with the one `pool_allocator` passed to `world_init`. `S`
+is the enum of system stages. A world without resources passes an empty enum for `R`.
 
 Resources are reached with `register_resource`, `is_resource_registered` and `get_resource`. They
 have no `_now`/`_later` variants, nothing about them is deferred.
@@ -131,6 +141,23 @@ resetting a buffer that was never applied leaks resources owned by its parts, an
 buffer twice hands the same resources to two parts.
 
 `spawn` has no `_later` variant: the thing is needed right away to record commands for it.
+
+# Stuff and Queries
+
+`Stuff($P, $R, $S)` is what a system gets. It forwards to its world, but only for things, parts
+and resources: it cannot register kinds, apply commands or init/destroy/reset the world.
+
+`Query($P, $R, $S)` iterates the things that have every kind of `with` and none of `without`.
+`with` cannot be empty and cannot share a kind with `without`. It walks the smallest part set of
+`with`, picked in `query_make` and again in `query_refresh`, which also starts the iteration over.
+`query.thing` is the current thing (nil once `query_next` returns false), and `query_has` and
+`query_get_part` read it.
+
+# API
+
+`api.odin` has the short names (`spawn`, `get_part`, `set_later`, ...). Each one is a proc group
+of the `world_`, `stuff_` and `query_` procs, so the handle you pass decides what you may do: a
+call a handle has no proc for does not compile. Names with only a world proc are plain aliases.
 
 # Systems
 

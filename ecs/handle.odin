@@ -93,16 +93,8 @@ handle_pool_reset :: proc(pool: ^Handle_Pool($T)) {
 	pool.slots_next = 1
 }
 
-handle_pool_capacity :: proc(pool: Handle_Pool($T)) -> int {
-	return len(pool.slots)
-}
-
 handle_pool_count_alive :: proc(pool: Handle_Pool($T)) -> int {
 	return pool.slots_next - 1 - pool.free_count
-}
-
-handle_pool_count_free :: proc(pool: Handle_Pool($T)) -> int {
-	return pool.free_count
 }
 
 // Returns a nil handle when the pool is full.
@@ -117,7 +109,7 @@ handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 
 		return handle_make(T, idx, slot.gen)
 	} else {
-		if pool.slots_next >= handle_pool_capacity(pool^) do return Handle(T){}
+		if pool.slots_next >= len(pool.slots) do return Handle(T){}
 
 		idx := pool.slots_next
 		pool.slots[idx] = Handle_Slot {

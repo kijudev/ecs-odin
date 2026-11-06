@@ -8,13 +8,12 @@ import "core:fmt"
 Query :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enum(P),
 	intrinsics.type_is_enum(R),
 	intrinsics.type_is_enum(S) {
-	stuff:           Stuff(P, R, S),
-	qwith:           bit_set[P],
-	qwithout:        bit_set[P],
-	first_pool_kind: P,
-	first_pool_size: int,
-	iter_thing:      Thing,
-	iter_pos:        int,
+	stuff:      Stuff(P, R, S),
+	qwith:      Archetype(P),
+	qwithout:   Archetype(P),
+	first_kind: P,
+	thing:      Thing,
+	iter_pos:   int,
 }
 
 // >---------------------------------------------------------------------- Query
@@ -24,82 +23,83 @@ query_make :: proc(
 	qwith: bit_set[P],
 	qwithout: bit_set[P],
 ) -> Query(P, R, S) {
-	// fmt.assertf(qwith == bit_set[P]{}, "Query with no parts is not allowed.")
-
-	kind, ok := check_conflicts(qwith, qwithout)
-	fmt.assertf(ok, "Query has conflicting parts: %v is in both with and without.", kind)
-
 	query := Query(P, R, S) {
 		stuff    = stuff,
-		qwith    = qwith,
-		qwithout = qwithout,
+		qwith    = archetype_make(qwith),
+		qwithout = archetype_make(qwithout),
 	}
 
-	first_kind, first_size := find_first_pool(&query)
-	query.first_pool_kind = first_kind
-	query.first_pool_size = first_size
+	assert(!archetype_is_empty(query.qwith), "Query needs at least one part to iterate.")
 
+	kind, ok := check_conflicts(query.qwith, query.qwithout)
+	fmt.assertf(ok, "Query has conflicting parts: %v is in both with and without.", kind)
+
+	query_refresh(&query)
 	return query
 }
 
 query_refresh :: proc(query: ^Query($P, $R, $S)) {
-	query.first_pool_kind = R{}
-	query.first_pool_size = 0
-	query.iter_thing = {}
+	query.first_kind = find_first_kind(query)
+	query.thing = {}
+	query.iter_pos = 0
 }
 
 query_next :: proc(query: ^Query($P, $R, $S)) -> bool {
 	world := query.stuff.world
-	things := part_set_get_things(&world.part_pool.sets[query.first_pool_kind])
+	things := part_pool_get_things(&world.part_pool, query.first_kind)
 
 	for query.iter_pos < len(things) {
 		thing := things[query.iter_pos]
 		query.iter_pos += 1
-		archetype := archetype_pool_get_mask(world.archetype_pool, thing)
+		archetype := archetype_pool_get(world.archetype_pool, thing)
 
-		if satifies(archetype, query.qwith, query.qwithout) {
-			query.iter_thing = thing
+		if satisfies(archetype, query.qwith, query.qwithout) {
+			query.thing = thing
 			return true
 		}
 	}
 
+	query.thing = {}
 	return false
 }
 
-query_get_thing :: proc(query: ^Query($P, $R, $S)) -> Thing {
-	return query.iter_thing
+// >---------------------------------------------------------- Query Current Thing
+
+query_has :: proc(query: ^Query($P, $R, $S), kind: P) -> bool {
+	return world_has(query.stuff.world, query.thing, kind)
 }
 
 query_get_part :: proc(query: ^Query($P, $R, $S), kind: P, $T: typeid) -> ^T {
-	thing := query.iter_thing
-	return get_part(query.stuff.world, thing, kind, T)
+	return world_get_part(query.stuff.world, query.thing, kind, T)
 }
 
 // >------------------------------------------------------------------ Internals
 
 @(private = "file")
-satifies :: proc(archetype: bit_set[$P], qwith: bit_set[P], qwithout: bit_set[P]) -> bool {
-	return (archetype & qwith) == qwith && (archetype & qwithout) == {}
+satisfies :: proc(archetype: Archetype($P), qwith: Archetype(P), qwithout: Archetype(P)) -> bool {
+	return archetype_contains(archetype, qwith) && archetype_is_disjoint(archetype, qwithout)
 }
 
 @(private = "file")
-find_first_pool :: proc(query: ^Query($P, $R, $S)) -> (P, int) {
-	size := 0
+find_first_kind :: proc(query: ^Query($P, $R, $S)) -> P {
 	kind := P{}
+	size := max(int)
 
-	for k in query.qwith {
-		sz := part_set_count_parts(&query.stuff.world.part_pool.sets[k])
-		if sz < size {
-			size = sz
+	it := archetype_iter_make(query.qwith)
+	for k in archetype_iter_next(&it) {
+		count := part_pool_count_parts(&query.stuff.world.part_pool, k)
+		if count < size {
+			size = count
 			kind = k
 		}
 	}
 
-	return kind, size
+	return kind
 }
 
 @(private = "file")
-check_conflicts :: proc(qwith: bit_set[$P], qwithout: bit_set[P]) -> (P, bool) {
-	for kind in qwith do if kind in qwithout do return kind, false
+check_conflicts :: proc(qwith: Archetype($P), qwithout: Archetype(P)) -> (P, bool) {
+	it := archetype_iter_make(archetype_intersect(qwith, qwithout))
+	for kind in archetype_iter_next(&it) do return kind, false
 	return P{}, true
 }

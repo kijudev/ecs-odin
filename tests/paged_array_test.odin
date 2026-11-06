@@ -361,7 +361,7 @@ inline_paged_array_get_page_and_pages :: proc(t: ^testing.T) {
 	page[2] = 5
 	testing.expect_value(t, ecs.inline_paged_array_get(&arr, 10), 5)
 
-	pages := ecs.inline_paged_array_get_pages(&arr)
+	pages := arr.pages[:]
 	testing.expect_value(t, len(pages), 4)
 	testing.expect(t, pages[0] == nil)
 	testing.expect(t, pages[1] == raw_data(page))
@@ -387,7 +387,7 @@ paged_array_get_page_and_pages :: proc(t: ^testing.T) {
 	page[2] = 5
 	testing.expect_value(t, ecs.paged_array_get(&arr, 10), 5)
 
-	pages := ecs.paged_array_get_pages(&arr)
+	pages := arr.pages
 	testing.expect_value(t, len(pages), 4)
 	testing.expect(t, pages[0] == nil)
 	testing.expect(t, pages[1] == raw_data(page))

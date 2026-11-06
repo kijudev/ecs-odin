@@ -48,7 +48,7 @@ system_pool_init_creates_empty_pool :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, ecs.system_pool_count_systems(&pool), 0)
 	for stage in Stage {
-		testing.expect_value(t, len(ecs.system_pool_get_systems(&pool, stage)), 0)
+		testing.expect_value(t, len(pool.systems[stage][:]), 0)
 		testing.expect(t, pool.graphs[stage] != nil)
 	}
 }
@@ -82,7 +82,7 @@ system_pool_reset_removes_systems :: proc(t: ^testing.T) {
 	ecs.system_pool_reset(&pool)
 
 	testing.expect_value(t, ecs.system_pool_count_systems(&pool), 0)
-	testing.expect_value(t, len(ecs.system_pool_get_systems(&pool, .Update)), 0)
+	testing.expect_value(t, len(pool.systems[.Update][:]), 0)
 	testing.expect(t, pool.graphs[.Update] != nil, "reset must keep the graph allocation")
 	testing.expect(t, !system_graph_edge(pool.graphs[.Update], 0, 1), "reset must clear the graph")
 }
@@ -117,7 +117,7 @@ system_pool_schedule_stores_the_system :: proc(t: ^testing.T) {
 
 	ecs.system_pool_schedule(&pool, system_a, .Update, {.Velocity}, {.Position})
 
-	systems := ecs.system_pool_get_systems(&pool, .Update)
+	systems := pool.systems[.Update][:]
 	testing.expect_value(t, len(systems), 1)
 	testing.expect_value(t, systems[0].reads, bit_set[Part]{.Velocity})
 	testing.expect_value(t, systems[0].writes, bit_set[Part]{.Position})
@@ -137,11 +137,11 @@ system_pool_schedule_groups_by_stage_in_order :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, ecs.system_pool_count_systems(&pool), 3)
 
-	update := ecs.system_pool_get_systems(&pool, .Update)
+	update := pool.systems[.Update][:]
 	testing.expect_value(t, len(update), 1)
 	testing.expect(t, update[0].system == system_b)
 
-	render := ecs.system_pool_get_systems(&pool, .Render)
+	render := pool.systems[.Render][:]
 	testing.expect_value(t, len(render), 2)
 	testing.expect(t, render[0].system == system_a)
 	testing.expect(t, render[1].system == system_c)
@@ -307,6 +307,9 @@ system_pool_run_graph_sync_empty_stage :: proc(t: ^testing.T) {
 
 @(test)
 system_pool_schedule_panics_when_stage_full :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
 	// The panic skips any cleanup, so take the memory from a static buffer instead of the heap.
 	@(static) backing: [512 * mem.Kilobyte]byte
 	arena: mem.Arena
@@ -340,6 +343,9 @@ system_pool_schedule_nil_asserts :: proc(t: ^testing.T) {
 
 @(test)
 system_pool_run_graph_sync_asserts_on_stale_graph :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
 	@(static) backing: [512 * mem.Kilobyte]byte
 	arena: mem.Arena
 	mem.arena_init(&arena, backing[:])

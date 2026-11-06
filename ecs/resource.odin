@@ -47,13 +47,11 @@ resource_pool_destroy :: proc(pool: ^Resource_Pool($R)) {
 	pool^ = {}
 }
 
-// Destroys and zeroes every resource, keeps the registrations.
 resource_pool_reset :: proc(pool: ^Resource_Pool($R)) {
 	destroy_all(pool)
 	mem.zero_slice(pool.resources_data[:pool.resources_size])
 }
 
-// The resource starts zeroed.
 resource_pool_register :: proc(
 	pool: ^Resource_Pool($R),
 	resource: R,

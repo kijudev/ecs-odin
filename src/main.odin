@@ -20,6 +20,8 @@ Stage :: enum {
 	PostUpdate,
 }
 
+World :: ecs.World(Part, Resource, Stage)
+
 Position :: struct {
 	x, y: f32,
 }
@@ -35,19 +37,20 @@ Health :: struct {
 Tag :: struct {}
 
 main :: proc() {
-	world: ecs.World(Part, Resource)
+	world: ecs.World(Part, Resource, Stage)
 	ecs.world_init(&world)
+	defer ecs.world_destroy(&world)
 
 	setup(&world)
 	seed(&world)
 
-	stuff := ecs.stuff_make(&world, Stage)
+	stuff := ecs.stuff_make(&world)
 	query := ecs.query_make(stuff, {.Position, .Velocity}, {.Health})
 
 	for ecs.query_next(&query) {
-		thing := ecs.query_get_thing(&query)
-		pos := ecs.query_get_part(&query, .Position, Position)
-		vel := ecs.query_get_part(&query, .Velocity, Velocity)
+		thing := query.thing
+		pos := ecs.get_part(&query, .Position, Position)
+		vel := ecs.get_part(&query, .Velocity, Velocity)
 
 		fmt.printf(
 			"Thing %v: Position(%v, %v), Velocity(%v, %v)\n",
@@ -60,21 +63,23 @@ main :: proc() {
 	}
 }
 
-setup :: proc(world: ^ecs.World(Part, Resource)) {
-	ecs.register(world, .Position, Position)
-	ecs.register(world, .Velocity, Velocity)
-	ecs.register(world, .Health, Health)
-	ecs.register(world, .Tag, Tag)
+setup :: proc(w: ^World) {
+	ecs.register(w, .Position, Position)
+	ecs.register(w, .Velocity, Velocity)
+	ecs.register(w, .Health, Health)
+	ecs.register(w, .Tag, Tag)
 }
 
-seed :: proc(world: ^ecs.World(Part, Resource)) {
-	a := ecs.spawn(world)
-	b := ecs.spawn(world)
+seed :: proc(w: ^World) {
+	a := ecs.spawn(w)
+	b := ecs.spawn(w)
 
-	ecs.set_now(world, a, .Position, Position{3, 4})
-	ecs.set_now(world, a, .Velocity, Velocity{1, 2})
+	ecs.set_later(w, a, .Position, Position{3, 4})
+	ecs.set_later(w, a, .Velocity, Velocity{1, 2})
 
-	ecs.set_now(world, b, .Position, Position{5, 6})
-	ecs.set_now(world, b, .Velocity, Velocity{7, 8})
-	ecs.set_now(world, b, .Health, Health{100})
+	ecs.set_later(w, b, .Position, Position{5, 6})
+	ecs.set_later(w, b, .Velocity, Velocity{7, 8})
+	ecs.set_later(w, b, .Health, Health{100})
+
+	ecs.world_apply_self(w)
 }

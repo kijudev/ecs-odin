@@ -13,9 +13,9 @@ thing_pool_init_creates_empty_pool :: proc(t: ^testing.T) {
 	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
-	testing.expect_value(t, ecs.thing_pool_capacity(pool), ecs.THING_POOL_MIN_CAPACITY)
+	testing.expect_value(t, len(pool.slots), ecs.THING_POOL_MIN_CAPACITY)
 	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 0)
-	testing.expect_value(t, ecs.thing_pool_count_free(pool), 0)
+	testing.expect_value(t, pool.free_count, 0)
 }
 
 @(test)
@@ -25,7 +25,7 @@ thing_pool_destroy_zeroes_pool :: proc(t: ^testing.T) {
 	ecs.thing_pool_spawn(&pool)
 	ecs.thing_pool_destroy(&pool)
 
-	testing.expect_value(t, ecs.thing_pool_capacity(pool), 0)
+	testing.expect_value(t, len(pool.slots), 0)
 	testing.expect(t, pool.slots == nil)
 	testing.expect(t, pool.free == nil)
 }
@@ -61,8 +61,8 @@ thing_pool_reset_invalidates_all_things :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.thing_pool_poke(pool, a))
 	testing.expect(t, !ecs.thing_pool_poke(pool, b))
 	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 0)
-	testing.expect_value(t, ecs.thing_pool_count_free(pool), 0)
-	testing.expect_value(t, ecs.thing_pool_capacity(pool), ecs.THING_POOL_MIN_CAPACITY)
+	testing.expect_value(t, pool.free_count, 0)
+	testing.expect_value(t, len(pool.slots), ecs.THING_POOL_MIN_CAPACITY)
 
 	// Pool is usable again after reset.
 	c := ecs.thing_pool_spawn(&pool)
@@ -120,7 +120,7 @@ thing_pool_spawn_fills_pool_to_capacity :: proc(t: ^testing.T) {
 	defer ecs.thing_pool_destroy(&pool)
 
 	// Slot 0 is reserved for THING_NIL.
-	usable := ecs.thing_pool_capacity(pool) - 1
+	usable := len(pool.slots) - 1
 	for _ in 0 ..< usable {
 		thing := ecs.thing_pool_spawn(&pool)
 		testing.expect(t, ecs.thing_pool_poke(pool, thing))
@@ -135,7 +135,7 @@ thing_pool_spawn_returns_nil_when_full :: proc(t: ^testing.T) {
 	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
-	usable := ecs.thing_pool_capacity(pool) - 1
+	usable := len(pool.slots) - 1
 	last: ecs.Thing
 	for _ in 0 ..< usable {
 		last = ecs.thing_pool_spawn(&pool)
@@ -162,7 +162,7 @@ thing_pool_kill_invalidates_thing :: proc(t: ^testing.T) {
 	testing.expect(t, ecs.thing_pool_kill(&pool, thing))
 	testing.expect(t, !ecs.thing_pool_poke(pool, thing))
 	testing.expect_value(t, ecs.thing_pool_count_alive(pool), 0)
-	testing.expect_value(t, ecs.thing_pool_count_free(pool), 1)
+	testing.expect_value(t, pool.free_count, 1)
 }
 
 @(test)
@@ -175,7 +175,7 @@ thing_pool_kill_twice_fails :: proc(t: ^testing.T) {
 
 	testing.expect(t, ecs.thing_pool_kill(&pool, thing))
 	testing.expect(t, !ecs.thing_pool_kill(&pool, thing))
-	testing.expect_value(t, ecs.thing_pool_count_free(pool), 1)
+	testing.expect_value(t, pool.free_count, 1)
 }
 
 @(test)
@@ -202,7 +202,7 @@ thing_pool_poke_rejects_out_of_range_idx :: proc(t: ^testing.T) {
 	ecs.thing_pool_init(&pool, ecs.THING_POOL_MIN_CAPACITY)
 	defer ecs.thing_pool_destroy(&pool)
 
-	thing := ecs.thing_make(ecs.Thing_Idx(ecs.thing_pool_capacity(pool)), 1)
+	thing := ecs.thing_make(ecs.Thing_Idx(len(pool.slots)), 1)
 	testing.expect(t, thing != ecs.THING_NIL)
 
 	testing.expect(t, !ecs.thing_pool_poke(pool, thing))
@@ -225,7 +225,7 @@ thing_pool_spawn_reuses_killed_slot_with_new_gen :: proc(t: ^testing.T) {
 	testing.expect(t, new.gen != old.gen)
 	testing.expect(t, ecs.thing_pool_poke(pool, new))
 	testing.expect(t, !ecs.thing_pool_poke(pool, old))
-	testing.expect_value(t, ecs.thing_pool_count_free(pool), 0)
+	testing.expect_value(t, pool.free_count, 0)
 }
 
 @(test)

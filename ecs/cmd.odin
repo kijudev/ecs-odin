@@ -87,18 +87,6 @@ cmd_pool_reset :: proc(pool: ^Cmd_Pool($P)) {
 	clear(&pool.parts)
 }
 
-cmd_pool_count_cmds :: proc(pool: ^Cmd_Pool($P)) -> int {
-	return len(pool.commands)
-}
-
-cmd_pool_parts_size :: proc(pool: ^Cmd_Pool($P)) -> int {
-	return len(pool.parts)
-}
-
-cmd_pool_get_cmds :: proc(pool: ^Cmd_Pool($P)) -> []Cmd(P) {
-	return pool.commands[:]
-}
-
 cmd_pool_record_kill :: proc(pool: ^Cmd_Pool($P), thing: Thing) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
 	record(pool, Cmd_Kill{thing = thing})

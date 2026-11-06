@@ -13,7 +13,7 @@ archetype_pool_init_creates_empty_pool :: proc(t: ^testing.T) {
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	defer ecs.archetype_pool_destroy(&pool)
 
-	testing.expect_value(t, ecs.archetype_pool_capacity(pool), ecs.ARCHETYPE_POOL_MIN_CAPACITY)
+	testing.expect_value(t, len(pool.slots), ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 
 	thing := ecs.thing_make(1)
 	for kind in Part {
@@ -27,7 +27,7 @@ archetype_pool_destroy_zeroes_pool :: proc(t: ^testing.T) {
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	ecs.archetype_pool_destroy(&pool)
 
-	testing.expect_value(t, ecs.archetype_pool_capacity(pool), 0)
+	testing.expect_value(t, len(pool.slots), 0)
 	testing.expect(t, pool.slots == nil)
 }
 
@@ -62,7 +62,7 @@ archetype_pool_reset_clears_all_masks :: proc(t: ^testing.T) {
 
 	testing.expect(t, !ecs.archetype_pool_has(pool, a, .Position))
 	testing.expect(t, !ecs.archetype_pool_has(pool, b, .Health))
-	testing.expect_value(t, ecs.archetype_pool_capacity(pool), ecs.ARCHETYPE_POOL_MIN_CAPACITY)
+	testing.expect_value(t, len(pool.slots), ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 }
 
 // >------------------------------------------------------------- Insert / Remove

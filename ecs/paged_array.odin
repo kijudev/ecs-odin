@@ -63,11 +63,6 @@ inline_paged_array_get_page :: proc(arr: ^Inline_Paged_Array($T, $C, $S), page: 
 	return page_slice(arr.pages[page], S)
 }
 
-// Not allocated pages are nil.
-inline_paged_array_get_pages :: proc(arr: ^Inline_Paged_Array($T, $C, $S)) -> [][^]T {
-	return arr.pages[:]
-}
-
 // Returns the zero value when the page of `idx` is not allocated.
 inline_paged_array_get :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: int) -> T {
 	page, offset := locate(idx, intrinsics.constant_log2(S), C * S)
@@ -160,11 +155,6 @@ paged_array_has_page :: proc(arr: ^Paged_Array($T), idx: int) -> bool {
 paged_array_get_page :: proc(arr: ^Paged_Array($T), page: int) -> []T {
 	check_page(page, len(arr.pages))
 	return page_slice(arr.pages[page], arr.page_size)
-}
-
-// Not allocated pages are nil.
-paged_array_get_pages :: proc(arr: ^Paged_Array($T)) -> [][^]T {
-	return arr.pages
 }
 
 // Returns the zero value when the page of `idx` is not allocated.

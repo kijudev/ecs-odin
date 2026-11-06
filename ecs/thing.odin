@@ -39,9 +39,7 @@ thing_pool_init :: proc(
 
 thing_pool_destroy :: handle_pool_destroy
 thing_pool_reset :: handle_pool_reset
-thing_pool_capacity :: handle_pool_capacity
 thing_pool_count_alive :: handle_pool_count_alive
-thing_pool_count_free :: handle_pool_count_free
 thing_pool_spawn :: handle_pool_spawn
 thing_pool_poke :: handle_pool_check
 thing_pool_kill :: handle_pool_kill

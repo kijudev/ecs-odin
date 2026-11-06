@@ -95,7 +95,7 @@ system_log_count :: proc(id: int) -> int {
 
 Part_Pool :: ecs.Part_Pool(Part)
 Cmd_Pool :: ecs.Cmd_Pool(Part)
-World :: ecs.World(Part, Resource)
+World :: ecs.World(Part, Resource, Stage)
 System_Pool :: ecs.System_Pool(Part, Resource, Stage)
 System :: ecs.System_Info(Part, Resource, Stage)
 Stuff :: ecs.Stuff(Part, Resource, Stage)
