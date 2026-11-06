@@ -172,7 +172,6 @@ part_pool_destroy :: proc(pool: ^Part_Pool($K)) {
 	pool^ = Part_Pool(K){}
 }
 
-// Keeps the registrations.
 part_pool_reset :: proc(pool: ^Part_Pool($K)) {
 	for kind in pool.registered {
 		part_set_reset(&pool.sets[kind])
@@ -397,7 +396,7 @@ parts_write :: proc(set: ^Part_Set, dst: rawptr, src: rawptr) {
 
 @(private = "file")
 parts_get_unchecked :: proc(set: ^Part_Set, idx: int) -> rawptr {
-	if set.part_size == 0 do return &Part_Zero_Sized
+	if intrinsics.unlikely(set.part_size == 0) do return &Part_Zero_Sized
 
 	offset := uintptr(idx * set.part_size)
 	return rawptr(uintptr(raw_data(set.parts_data)) + offset)

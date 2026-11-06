@@ -5,6 +5,9 @@ import "core:fmt"
 
 // >-------------------------------------------------------- Constants and Types
 
+/*
+Iterates the things that have every kind of `include` and none of `exclude`.
+*/
 Query :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
 	stuff:   Stuff(K, S),
@@ -17,6 +20,14 @@ Query :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 
 // >---------------------------------------------------------------------- Query
 
+/*
+Makes a query ready for the first `query_next`. It walks the smallest part set of `include`.
+
+Asserts:
+- `include` is not empty.
+- no kind is in both `include` and `exclude`.
+- every kind of `include` is a registered part.
+*/
 query_make :: proc(stuff: Stuff($K, $S), include: bit_set[K], exclude: bit_set[K]) -> Query(K, S) {
 	query := Query(K, S) {
 		stuff   = stuff,
@@ -33,12 +44,25 @@ query_make :: proc(stuff: Stuff($K, $S), include: bit_set[K], exclude: bit_set[K
 	return query
 }
 
+/*
+Picks the smallest part set of `include` again and starts the iteration over.
+
+Asserts:
+- every kind of `include` is a registered part.
+*/
 query_refresh :: proc(query: ^Query($K, $S)) {
 	query.first = find_first_kind(query)
 	query.thing = {}
 	query.pos = 0
 }
 
+/*
+Moves to the next matching thing.
+
+Returns false once there are no more things, and clears the current thing. Adding or removing
+parts of the included kinds while iterating can skip or repeat things, use the `_later` procs for
+that.
+*/
 query_next :: proc(query: ^Query($K, $S)) -> bool {
 	world := query.stuff.world
 	things := part_pool_get_things(&world.part_pool, query.first)
@@ -60,11 +84,15 @@ query_next :: proc(query: ^Query($K, $S)) -> bool {
 
 // >-------------------------------------------------------- Query Current Thing
 
+/* See has. */
 query_has :: proc(query: ^Query($K, $S), kind: K) -> bool {
 	return world_has(query.stuff.world, query.thing, kind)
 }
 
+/* See get_part. */
 query_get_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
+	fmt.assertf(query.thing == {}, "Query has no current thing to get part %v from.", kind)
+
 	fmt.assertf(
 		query_has(query, kind),
 		"Query does not have part %v for thing %v.",
@@ -75,6 +103,7 @@ query_get_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
 	return part_pool_get_unchecked(&query.stuff.world.part_pool, query.thing, kind, T)
 }
 
+/* See get_thing. */
 query_get_thing :: proc(query: ^Query($K, $S)) -> Thing {
 	return query.thing
 }
