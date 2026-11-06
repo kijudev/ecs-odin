@@ -5,27 +5,22 @@ import "core:fmt"
 
 // >-------------------------------------------------------- Constants and Types
 
-Query :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enum(P),
-	intrinsics.type_is_enum(R),
+Query :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
-	stuff:      Stuff(P, R, S),
-	include:      Archetype(P),
-	exclude:   Archetype(P),
-	first_kind: P,
+	stuff:      Stuff(K, S),
+	include:    Archetype(K),
+	exclude:    Archetype(K),
+	first_kind: K,
 	thing:      Thing,
 	iter_pos:   int,
 }
 
 // >---------------------------------------------------------------------- Query
 
-query_make :: proc(
-	stuff: Stuff($P, $R, $S),
-	include: bit_set[P],
-	exclude: bit_set[P],
-) -> Query(P, R, S) {
-	query := Query(P, R, S) {
-		stuff    = stuff,
-		include    = archetype_make(include),
+query_make :: proc(stuff: Stuff($K, $S), include: bit_set[K], exclude: bit_set[K]) -> Query(K, S) {
+	query := Query(K, S) {
+		stuff   = stuff,
+		include = archetype_make(include),
 		exclude = archetype_make(exclude),
 	}
 
@@ -38,13 +33,13 @@ query_make :: proc(
 	return query
 }
 
-query_refresh :: proc(query: ^Query($P, $R, $S)) {
+query_refresh :: proc(query: ^Query($K, $S)) {
 	query.first_kind = find_first_kind(query)
 	query.thing = {}
 	query.iter_pos = 0
 }
 
-query_next :: proc(query: ^Query($P, $R, $S)) -> bool {
+query_next :: proc(query: ^Query($K, $S)) -> bool {
 	world := query.stuff.world
 	things := part_pool_get_things(&world.part_pool, query.first_kind)
 
@@ -63,30 +58,30 @@ query_next :: proc(query: ^Query($P, $R, $S)) -> bool {
 	return false
 }
 
-// >---------------------------------------------------------- Query Current Thing
+// >-------------------------------------------------------- Query Current Thing
 
-query_has :: proc(query: ^Query($P, $R, $S), kind: P) -> bool {
+query_has :: proc(query: ^Query($K, $S), kind: K) -> bool {
 	return world_has(query.stuff.world, query.thing, kind)
 }
 
-query_get_part :: proc(query: ^Query($P, $R, $S), kind: P, $T: typeid) -> ^T {
+query_get_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
 	return world_get_part(query.stuff.world, query.thing, kind, T)
 }
 
-query_get_thing :: proc(query: ^Query($P, $R, $S)) -> Thing {
+query_get_thing :: proc(query: ^Query($K, $S)) -> Thing {
 	return query.thing
 }
 
 // >------------------------------------------------------------------ Internals
 
 @(private = "file")
-satisfies :: proc(archetype: Archetype($P), include: Archetype(P), exclude: Archetype(P)) -> bool {
+satisfies :: proc(archetype: Archetype($K), include: Archetype(K), exclude: Archetype(K)) -> bool {
 	return archetype_contains(archetype, include) && archetype_is_disjoint(archetype, exclude)
 }
 
 @(private = "file")
-find_first_kind :: proc(query: ^Query($P, $R, $S)) -> P {
-	kind := P{}
+find_first_kind :: proc(query: ^Query($K, $S)) -> K {
+	kind := K{}
 	size := max(int)
 
 	it := archetype_iter_make(query.include)
@@ -102,8 +97,8 @@ find_first_kind :: proc(query: ^Query($P, $R, $S)) -> P {
 }
 
 @(private = "file")
-check_conflicts :: proc(include: Archetype($P), exclude: Archetype(P)) -> (P, bool) {
+check_conflicts :: proc(include: Archetype($K), exclude: Archetype(K)) -> (K, bool) {
 	it := archetype_iter_make(archetype_intersect(include, exclude))
 	for kind in archetype_iter_next(&it) do return kind, false
-	return P{}, true
+	return K{}, true
 }

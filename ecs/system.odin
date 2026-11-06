@@ -6,19 +6,17 @@ import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
 
-System_Info :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enum(P),
-	intrinsics.type_is_enum(R),
+System_Info :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
-	system: proc(stuff: Stuff(P, R, S)),
-	reads:  bit_set[P],
-	writes: bit_set[P],
+	system: proc(stuff: Stuff(K, S)),
+	reads:  bit_set[K],
+	writes: bit_set[K],
 	stage:  S,
 }
 
-System_Pool :: struct($P: typeid, $R: typeid, $S: typeid) where intrinsics.type_is_enum(P),
-	intrinsics.type_is_enum(R),
+System_Pool :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
-	systems:   [S][dynamic]System_Info(P, R, S),
+	systems:   [S][dynamic]System_Info(K, S),
 	graphs:    [S]^System_Graph,
 	allocator: mem.Allocator,
 }
@@ -34,15 +32,15 @@ SYSTEM_POOL_MAX_STAGE_CAPACITY :: 256
 
 // >---------------------------------------------------------------- System_Info
 
-system_info_conflicts :: proc(a, b: ^System_Info($P, $R, $S)) -> bool {
+system_info_conflicts :: proc(a, b: ^System_Info($K, $S)) -> bool {
 	return a.writes & b.writes != {} || a.writes & b.reads != {} || a.reads & b.writes != {}
 }
 
 // >---------------------------------------------------------------- System_Pool
 
-system_pool_init :: proc(pool: ^System_Pool($P, $R, $S), allocator := context.allocator) {
+system_pool_init :: proc(pool: ^System_Pool($K, $S), allocator := context.allocator) {
 	for stage in S {
-		systems, systems_err := make([dynamic]System_Info(P, R, S), 0, SYSTEM_POOL_MAX_STAGE_CAPACITY, allocator)
+		systems, systems_err := make([dynamic]System_Info(K, S), 0, SYSTEM_POOL_MAX_STAGE_CAPACITY, allocator)
 		if systems_err != nil do fmt.panicf("Failed to allocate memory for system pool for stage %v.", stage)
 
 		graph, graph_err := new(System_Graph, allocator)
@@ -55,16 +53,16 @@ system_pool_init :: proc(pool: ^System_Pool($P, $R, $S), allocator := context.al
 	pool.allocator = allocator
 }
 
-system_pool_destroy :: proc(pool: ^System_Pool($P, $R, $S)) {
+system_pool_destroy :: proc(pool: ^System_Pool($K, $S)) {
 	for stage in S {
 		delete(pool.systems[stage])
 		free(pool.graphs[stage], pool.allocator)
 	}
 
-	pool^ = System_Pool(P, R, S){}
+	pool^ = System_Pool(K, S){}
 }
 
-system_pool_reset :: proc(pool: ^System_Pool($P, $R, $S)) {
+system_pool_reset :: proc(pool: ^System_Pool($K, $S)) {
 	for stage in S {
 		clear(&pool.systems[stage])
 		system_graph_reset(pool.graphs[stage])
@@ -72,15 +70,15 @@ system_pool_reset :: proc(pool: ^System_Pool($P, $R, $S)) {
 }
 
 system_pool_schedule :: proc(
-	pool: ^System_Pool($P, $R, $S),
-	system: proc(stuff: Stuff(P, R, S)),
+	pool: ^System_Pool($K, $S),
+	system: proc(stuff: Stuff(K, S)),
 	stage: S,
-	reads: bit_set[P],
-	writes: bit_set[P],
+	reads: bit_set[K],
+	writes: bit_set[K],
 ) {
 	assert(system != nil, "Cannot schedule a nil system.")
 
-	info := System_Info(P, R, S) {
+	info := System_Info(K, S) {
 		system = system,
 		reads  = reads,
 		writes = writes,
@@ -97,22 +95,22 @@ system_pool_schedule :: proc(
 	append(&pool.systems[stage], info)
 }
 
-system_pool_count_systems :: proc(pool: ^System_Pool($P, $R, $S)) -> int {
+system_pool_count_systems :: proc(pool: ^System_Pool($K, $S)) -> int {
 	count := 0
 	for stage in S do count += len(pool.systems[stage])
 	return count
 }
 
-system_pool_build_graphs :: proc(pool: ^System_Pool($P, $R, $S)) {
+system_pool_build_graphs :: proc(pool: ^System_Pool($K, $S)) {
 	for stage in S {
 		system_graph_build(pool.graphs[stage], pool.systems[stage][:])
 	}
 }
 
 system_pool_run_stage_sync :: proc(
-	pool: ^System_Pool($P, $R, $S),
+	pool: ^System_Pool($K, $S),
 	stage: S,
-	stuff: Stuff(P, R, S),
+	stuff: Stuff(K, S),
 ) -> int {
 	graph := pool.graphs[stage]
 	systems := pool.systems[stage][:]
@@ -149,7 +147,7 @@ system_pool_run_stage_sync :: proc(
 
 // >--------------------------------------------------------------- System_Graph
 
-system_graph_build :: proc(graph: ^System_Graph, systems: []System_Info($P, $R, $S)) {
+system_graph_build :: proc(graph: ^System_Graph, systems: []System_Info($K, $S)) {
 	system_graph_reset(graph)
 
 	n := len(systems)

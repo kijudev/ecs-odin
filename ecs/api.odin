@@ -2,10 +2,10 @@ package ecs
 
 // >---------------------------------------------------------------------- Setup
 
-register :: world_register
-is_registered :: world_is_registered
-register_resource :: world_register_resource
-is_resource_registered :: world_is_resource_registered
+register_part :: world_register_part
+is_part_registered :: world_is_part_registered
+register_stash :: world_register_stash
+is_stash_registered :: world_is_stash_registered
 
 // >--------------------------------------------------------------------- Things
 
@@ -110,9 +110,9 @@ remove_later :: proc {
 	stuff_remove_later,
 }
 
-// >------------------------------------------------------------------ Resources
+// >-------------------------------------------------------------------- Stashes
 
-get_resource :: proc {
-	world_get_resource,
-	stuff_get_resource,
+get_stash :: proc {
+	world_get_stash,
+	stuff_get_stash,
 }

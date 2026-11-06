@@ -3,14 +3,21 @@ package main
 import ecs "../ecs"
 import "core:fmt"
 
-// >---------------------------------------------------------------------- Parts
+// >---------------------------------------------------------------------- Kinds
 
-Part :: enum {
+Kind :: enum {
+	// Parts
 	Position,
 	Velocity,
 	Health,
 	Poisoned,
+
+	// Stashes
+	Time,
+	Gravity,
 }
+
+// >---------------------------------------------------------------------- Parts
 
 Position :: struct {
 	x, y: f32,
@@ -26,12 +33,7 @@ Health :: struct {
 
 Poisoned :: struct {}
 
-// >------------------------------------------------------------------ Resources
-
-Resource :: enum {
-	Time,
-	Gravity,
-}
+// >-------------------------------------------------------------------- Stashes
 
 Time :: struct {
 	delta: f32,
@@ -50,8 +52,8 @@ Stage :: enum {
 	PostUpdate,
 }
 
-World :: ecs.World(Part, Resource, Stage)
-Stuff :: ecs.Stuff(Part, Resource, Stage)
+World :: ecs.World(Kind, Stage)
+Stuff :: ecs.Stuff(Kind, Stage)
 
 // >----------------------------------------------------------------------- Main
 
@@ -69,24 +71,24 @@ main :: proc() {
 }
 
 setup :: proc(w: ^World) {
-	ecs.register(w, .Position, Position)
-	ecs.register(w, .Velocity, Velocity)
-	ecs.register(w, .Health, Health)
-	ecs.register(w, .Poisoned, Poisoned)
+	ecs.register_part(w, .Position, Position)
+	ecs.register_part(w, .Velocity, Velocity)
+	ecs.register_part(w, .Health, Health)
+	ecs.register_part(w, .Poisoned, Poisoned)
 
-	ecs.register_resource(w, .Time, Time)
-	ecs.register_resource(w, .Gravity, Gravity)
-	ecs.get_resource(w, .Time, Time).delta = 0.5
-	ecs.get_resource(w, .Gravity, Gravity).y = -10
+	ecs.register_stash(w, .Time, Time)
+	ecs.register_stash(w, .Gravity, Gravity)
+	ecs.get_stash(w, .Time, Time).delta = 0.5
+	ecs.get_stash(w, .Gravity, Gravity).y = -10
 
-	ecs.world_schedule(w, system_tick, .PreUpdate, {}, {})
+	ecs.world_schedule(w, system_tick, .PreUpdate, {}, {.Time})
 
-	ecs.world_schedule(w, system_fall, .Update, {}, {.Velocity})
-	ecs.world_schedule(w, system_move, .Update, {.Velocity}, {.Position})
+	ecs.world_schedule(w, system_fall, .Update, {.Time, .Gravity}, {.Velocity})
+	ecs.world_schedule(w, system_move, .Update, {.Time, .Velocity}, {.Position})
 	ecs.world_schedule(w, system_poison, .Update, {.Poisoned}, {.Health})
 
 	ecs.world_schedule(w, system_reap, .PostUpdate, {.Health}, {})
-	ecs.world_schedule(w, system_report, .PostUpdate, {.Position, .Health}, {})
+	ecs.world_schedule(w, system_report, .PostUpdate, {.Time, .Position, .Health}, {})
 }
 
 seed :: proc(w: ^World) {
@@ -104,12 +106,12 @@ seed :: proc(w: ^World) {
 // >-------------------------------------------------------------------- Systems
 
 system_tick :: proc(stuff: Stuff) {
-	ecs.get_resource(stuff, .Time, Time).frame += 1
+	ecs.get_stash(stuff, .Time, Time).frame += 1
 }
 
 system_fall :: proc(stuff: Stuff) {
-	dt := ecs.get_resource(stuff, .Time, Time).delta
-	gravity := ecs.get_resource(stuff, .Gravity, Gravity)
+	dt := ecs.get_stash(stuff, .Time, Time).delta
+	gravity := ecs.get_stash(stuff, .Gravity, Gravity)
 
 	query := ecs.query_make(stuff, {.Velocity}, {})
 	for ecs.query_next(&query) {
@@ -119,7 +121,7 @@ system_fall :: proc(stuff: Stuff) {
 }
 
 system_move :: proc(stuff: Stuff) {
-	dt := ecs.get_resource(stuff, .Time, Time).delta
+	dt := ecs.get_stash(stuff, .Time, Time).delta
 
 	query := ecs.query_make(stuff, {.Position, .Velocity}, {})
 	for ecs.query_next(&query) {
@@ -149,7 +151,7 @@ system_reap :: proc(stuff: Stuff) {
 }
 
 system_report :: proc(stuff: Stuff) {
-	frame := ecs.get_resource(stuff, .Time, Time).frame
+	frame := ecs.get_stash(stuff, .Time, Time).frame
 	fmt.printfln("frame %v, %v alive", frame, ecs.count_alive(stuff))
 
 	query := ecs.query_make(stuff, {.Position, .Health}, {})

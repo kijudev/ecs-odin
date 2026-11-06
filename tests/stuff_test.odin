@@ -7,10 +7,10 @@ import ecs "../ecs"
 @(private = "file")
 make_world :: proc(world: ^World) {
 	ecs.world_init(world, ecs.THING_POOL_MIN_CAPACITY)
-	ecs.register(world, .Position, Position)
-	ecs.register(world, .Velocity, Velocity)
-	ecs.register(world, .Tag, Tag)
-	ecs.register_resource(world, .Time, Time)
+	ecs.register_part(world, .Position, Position)
+	ecs.register_part(world, .Velocity, Velocity)
+	ecs.register_part(world, .Tag, Tag)
+	ecs.register_stash(world, .Time, Time)
 }
 
 // Every call goes through the short names with a Stuff, so this also checks that the groups
@@ -102,15 +102,15 @@ stuff_later_procs_record_into_the_world :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.has(stuff, b, .Tag))
 }
 
-// >------------------------------------------------------------------ Resources
+// >-------------------------------------------------------------------- Stashes
 
 @(test)
-stuff_get_resource_is_the_worlds :: proc(t: ^testing.T) {
+stuff_get_stash_is_the_worlds :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
 	stuff := ecs.stuff_make(&world)
 
-	time := ecs.get_resource(stuff, .Time, Time)
-	testing.expect(t, time == ecs.get_resource(&world, .Time, Time))
+	time := ecs.get_stash(stuff, .Time, Time)
+	testing.expect(t, time == ecs.get_stash(&world, .Time, Time))
 }

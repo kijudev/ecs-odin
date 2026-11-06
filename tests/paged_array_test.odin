@@ -72,7 +72,7 @@ inline_paged_array_reset_zeroes_and_keeps_pages :: proc(t: ^testing.T) {
 	testing.expect_value(t, ecs.inline_paged_array_get(&arr, 1), 11)
 }
 
-// >------------------------------------------------------------------- Accessing
+// >------------------------------------------------------------------ Accessing
 
 @(test)
 inline_paged_array_set_allocates_only_its_page :: proc(t: ^testing.T) {

@@ -69,7 +69,7 @@ does not.
 
 ## Part Pool
 
-`Part_Pool($P)` is one `Part_Set` per kind of `P`, plus the type each kind was registered with. It
+`Part_Pool($K)` is one `Part_Set` per kind of `K`, plus the type each kind was registered with. It
 only cares about parts: it doesn't know if a thing is alive or which kinds it has, that is up to
 whoever uses it.
 
@@ -82,30 +82,31 @@ Parts are set with `set_value`, `set_pointer` (`nil` zeroes the part) or the unt
 There are no proc groups. `remove_all` tries every registered kind; if you already know which
 kinds a thing has, `remove_unchecked` on those is faster.
 
-# Resources
+# Stashes
 
-`Resource_Pool($R)` holds one value per kind of `R`, for things that aren't tied to any thing:
-time, input, config. The values are packed into one buffer of a fixed capacity, allocated once in
-`init`, so a resource never moves and its pointer stays valid. Registering puts the next resource
-behind the previous one, aligned for its type, and panics when it doesn't fit anymore.
+A stash is a single value that belongs to the world rather than to any thing: time, input, config.
+`Stash_Pool($K)` holds one value per registered kind of `K`. The values are packed into one buffer
+of a fixed capacity, allocated once in `init`, so a stash never moves and its pointer stays valid.
+Registering puts the next stash behind the previous one, aligned for its type, and panics when it
+doesn't fit anymore.
 
-A resource starts zeroed and is changed through the pointer from `get`. `reset` runs the
-`destroy` callbacks and zeroes every resource but keeps the registrations; `destroy` runs them
+A stash starts zeroed and is changed through the pointer from `get`. `reset` runs the
+`destroy` callbacks and zeroes every stash but keeps the registrations; `destroy` runs them
 and frees the buffer.
 
 # Archetypes
 
-`Archetype($P)` is the set of part kinds a thing has. It is a `bit_set[P]` underneath, but only
+`Archetype($K)` is the set of part kinds a thing has. It is a `bit_set[K]` underneath, but only
 the `archetype_*` procs touch it: `has`, `insert`, `remove`, `clear`, `is_empty`, `contains`
 (every kind of the other one is in it), `is_disjoint` and `intersect`. Iterate it with
 `it := archetype_iter_make(a)` and `for kind in archetype_iter_next(&it)`.
 
-`Archetype_Pool($P)` keeps one `Archetype` per thing idx. Like the part pool it doesn't know if a
+`Archetype_Pool($K)` keeps one `Archetype` per thing idx. Like the part pool it doesn't know if a
 thing is alive.
 
 # Commands
 
-`Cmd_Buffer($P)` records deferred mutations as a `Cmd($P)` union (`Cmd_Kill`, `Cmd_Set_Value`,
+`Cmd_Buffer($K)` records deferred mutations as a `Cmd($K)` union (`Cmd_Kill`, `Cmd_Set_Value`,
 `Cmd_Set_Zero`, `Cmd_Remove`) in record order. It only stores commands; applying them is up to the caller.
 
 Part values are copied into a single `parts` byte buffer, packed without padding. `Cmd_Set_Value`
@@ -116,11 +117,17 @@ packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buf
 
 # World
 
-`World($P, $R, $S)` owns a `Thing_Pool`, a `Part_Pool(P)`, an `Archetype_Pool(P)`, a `Cmd_Buffer(P)`,
-a `Resource_Pool(R)` and a `System_Pool(P, R, S)`, all allocated with the one `pool_allocator`
-passed to `world_init`. `S` is the enum of system stages. A world without resources passes an empty enum for `R`.
+`World($K, $S)` owns a `Thing_Pool`, a `Part_Pool(K)`, an `Archetype_Pool(K)`, a `Cmd_Buffer(K)`,
+a `Stash_Pool(K)` and a `System_Pool(K, S)`, all allocated with the one `pool_allocator`
+passed to `world_init`. `S` is the enum of system stages.
 
-Resources are reached with `register_resource`, `is_resource_registered` and `get_resource`. They
+`K` is one enum for parts and stashes alike. A kind becomes a part when it is registered with
+`register` and a stash when it is registered with `register_stash`, and it is never both: registering
+a kind in the other role asserts. Part and stash procs assert on a kind registered in the other
+role the same way they do on an unregistered one. Since `bit_set[K]` holds at most 128 kinds, parts
+and stashes share that limit.
+
+Stashes are reached with `register_stash`, `is_stash_registered` and `get_stash`. They
 have no `_now`/`_later` variants, nothing about them is deferred.
 
 Mutations come in two flavours:
@@ -134,16 +141,18 @@ Mutations come in two flavours:
 `world_apply` applies the world's buffer in record order and resets it. `world_apply_buffer` applies a
 buffer recorded elsewhere and leaves it untouched; the caller resets it, and may replay it into
 several worlds. `world_reset` drops unapplied commands, kills every thing and zeroes every
-resource, keeping all registrations.
+stash, keeping all registrations.
 
 Part values are moved into the world on apply. The buffer itself never runs `destroy` callbacks:
-resetting a buffer that was never applied leaks resources owned by its parts, and applying one
-buffer twice hands the same resources to two parts.
+resetting a buffer that was never applied leaks whatever its parts own, and applying one
+buffer twice hands the same memory to two parts.
 
 `spawn` has no `_later` variant: the thing is needed right away to record commands for it.
 
-Systems are `proc(stuff: Stuff(P, R, S))`, scheduled with `world_schedule` into a stage with the
-part kinds they read and write. `world_run_stage_sync` runs one stage and then applies the commands its
+Systems are `proc(stuff: Stuff(K, S))`, scheduled with `world_schedule` into a stage with the
+kinds they read and write. Stash kinds go into `reads` and `writes` like part kinds, so two systems
+touching the same stash are ordered the same way as two touching the same part. Nothing checks that
+a system only touches what it declared. `world_run_stage_sync` runs one stage and then applies the commands its
 systems recorded with `world_apply`, so `_later` changes become visible to the next stage.
 `world_run_sync` runs every stage in the order of `S`. The stage graph is rebuilt on the next run
 whenever systems were scheduled since the last build. Everything runs on one thread for now.
@@ -151,10 +160,10 @@ whenever systems were scheduled since the last build. Everything runs on one thr
 
 # Stuff and Queries
 
-`Stuff($P, $R, $S)` is what a system gets. It forwards to its world, but only for things, parts
-and resources: it cannot register kinds, apply commands or init/destroy/reset the world.
+`Stuff($K, $S)` is what a system gets. It forwards to its world, but only for things, parts
+and stashes: it cannot register kinds, apply commands or init/destroy/reset the world.
 
-`Query($P, $R, $S)` iterates the things that have every kind of `include` and none of `exclude`.
+`Query($K, $S)` iterates the things that have every kind of `include` and none of `exclude`.
 `include` cannot be empty and cannot share a kind with `exclude`. It walks the smallest part set of
 `include`, picked in `query_make` and again in `query_refresh`, which also starts the iteration over.
 `query.thing` is the current thing (nil once `query_next` returns false), and `query_has` and
@@ -165,7 +174,3 @@ and resources: it cannot register kinds, apply commands or init/destroy/reset th
 `api.odin` has the short names (`spawn`, `get_part`, `set_later`, ...). Each one is a proc group
 of the `world_`, `stuff_` and `query_` procs, so the handle you pass decides what you may do: a
 call a handle has no proc for does not compile. Names with only a world proc are plain aliases.
-
-# Systems
-
-This is going to hurt.

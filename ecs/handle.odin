@@ -16,7 +16,6 @@ Handle_Raw :: bit_field u32 {
 	gen: Handle_Gen | HANDLE_GEN_BITS,
 }
 
-// `T` only tags the handle so handles of different pools can't be mixed up.
 Handle :: struct($T: typeid) {
 	using raw: Handle_Raw,
 }
@@ -97,7 +96,6 @@ handle_pool_count_alive :: proc(pool: Handle_Pool($T)) -> int {
 	return pool.slots_next - 1 - pool.free_count
 }
 
-// Returns a nil handle when the pool is full.
 handle_pool_spawn :: proc(pool: ^Handle_Pool($T)) -> Handle(T) {
 	if (pool.free_count > 0) {
 		idx := pool.free[pool.free_count - 1]

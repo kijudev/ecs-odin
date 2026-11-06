@@ -9,21 +9,21 @@ import ecs "../ecs"
 
 @(test)
 archetype_pool_init_creates_empty_pool :: proc(t: ^testing.T) {
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	defer ecs.archetype_pool_destroy(&pool)
 
 	testing.expect_value(t, len(pool.slots), ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 
 	thing := ecs.thing_make(1)
-	for kind in Part {
+	for kind in PARTS {
 		testing.expect(t, !ecs.archetype_pool_has(pool, thing, kind))
 	}
 }
 
 @(test)
 archetype_pool_destroy_zeroes_pool :: proc(t: ^testing.T) {
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	ecs.archetype_pool_destroy(&pool)
 
@@ -37,7 +37,7 @@ archetype_pool_destroy_frees_with_init_allocator :: proc(t: ^testing.T) {
 	mem.tracking_allocator_init(&track, context.allocator)
 	defer mem.tracking_allocator_destroy(&track)
 
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY, mem.tracking_allocator(&track))
 	testing.expect(t, len(track.allocation_map) > 0)
 
@@ -49,7 +49,7 @@ archetype_pool_destroy_frees_with_init_allocator :: proc(t: ^testing.T) {
 
 @(test)
 archetype_pool_reset_clears_all_masks :: proc(t: ^testing.T) {
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	defer ecs.archetype_pool_destroy(&pool)
 
@@ -65,11 +65,11 @@ archetype_pool_reset_clears_all_masks :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(pool.slots), ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 }
 
-// >------------------------------------------------------------- Insert / Remove
+// >------------------------------------------------------------ Insert / Remove
 
 @(test)
 archetype_pool_insert_sets_kind :: proc(t: ^testing.T) {
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	defer ecs.archetype_pool_destroy(&pool)
 
@@ -84,7 +84,7 @@ archetype_pool_insert_sets_kind :: proc(t: ^testing.T) {
 
 @(test)
 archetype_pool_insert_twice_is_idempotent :: proc(t: ^testing.T) {
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	defer ecs.archetype_pool_destroy(&pool)
 
@@ -100,7 +100,7 @@ archetype_pool_insert_twice_is_idempotent :: proc(t: ^testing.T) {
 
 @(test)
 archetype_pool_remove_keeps_other_kinds :: proc(t: ^testing.T) {
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	defer ecs.archetype_pool_destroy(&pool)
 
@@ -115,7 +115,7 @@ archetype_pool_remove_keeps_other_kinds :: proc(t: ^testing.T) {
 
 @(test)
 archetype_pool_remove_missing_is_noop :: proc(t: ^testing.T) {
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	defer ecs.archetype_pool_destroy(&pool)
 
@@ -129,7 +129,7 @@ archetype_pool_remove_missing_is_noop :: proc(t: ^testing.T) {
 
 @(test)
 archetype_pool_things_are_independent :: proc(t: ^testing.T) {
-	pool: ecs.Archetype_Pool(Part)
+	pool: ecs.Archetype_Pool(Kind)
 	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 	defer ecs.archetype_pool_destroy(&pool)
 

@@ -5,16 +5,16 @@ import "core:testing"
 
 import ecs "../ecs"
 
-Query :: ecs.Query(Part, Resource, Stage)
+Query :: ecs.Query(Kind, Stage)
 
 // Health is left unregistered on purpose.
 @(private = "file")
 make_world :: proc(world: ^World, allocator := context.allocator) {
 	ecs.world_init(world, ecs.THING_POOL_MIN_CAPACITY, 64, allocator)
-	ecs.register(world, .Position, Position)
-	ecs.register(world, .Velocity, Velocity)
-	ecs.register(world, .Tag, Tag)
-	ecs.register(world, .Target, Position)
+	ecs.register_part(world, .Position, Position)
+	ecs.register_part(world, .Velocity, Velocity)
+	ecs.register_part(world, .Tag, Tag)
+	ecs.register_part(world, .Target, Position)
 }
 
 @(private = "file")
@@ -29,7 +29,7 @@ contains :: proc(things: []ecs.Thing, thing: ecs.Thing) -> bool {
 	return false
 }
 
-// >---------------------------------------------------------------- Iteration
+// >------------------------------------------------------------------ Iteration
 
 @(test)
 query_yields_things_with_all_and_none_of_without :: proc(t: ^testing.T) {
@@ -89,9 +89,9 @@ query_starts_from_the_smallest_set :: proc(t: ^testing.T) {
 	ecs.set_now(&world, only, .Position, Position{})
 	ecs.set_now(&world, only, .Velocity, Velocity{})
 
-	// Position comes first in Part, so picking it means the sizes were ignored.
+	// Position comes first in Kind, so picking it means the sizes were ignored.
 	query := ecs.query_make(ecs.stuff_make(&world), {.Position, .Velocity}, {})
-	testing.expect_value(t, query.first_kind, Part.Velocity)
+	testing.expect_value(t, query.first_kind, Kind.Velocity)
 
 	things := collect(&query)
 	testing.expect_value(t, len(things), 1)
@@ -133,10 +133,10 @@ query_refresh_starts_over :: proc(t: ^testing.T) {
 		thing := ecs.spawn(&world)
 		ecs.set_now(&world, thing, .Velocity, Velocity{})
 	}
-	testing.expect_value(t, query.first_kind, Part.Position)
+	testing.expect_value(t, query.first_kind, Kind.Position)
 
 	ecs.query_refresh(&query)
-	testing.expect_value(t, query.first_kind, Part.Position)
+	testing.expect_value(t, query.first_kind, Kind.Position)
 	testing.expect_value(t, query.thing, ecs.THING_NIL)
 	testing.expect_value(t, len(collect(&query)), 1)
 
@@ -149,14 +149,14 @@ query_refresh_starts_over :: proc(t: ^testing.T) {
 	}
 
 	ecs.query_refresh(&query)
-	testing.expect_value(t, query.first_kind, Part.Velocity)
+	testing.expect_value(t, query.first_kind, Kind.Velocity)
 	things := collect(&query)
 	testing.expect_value(t, len(things), 2)
 	testing.expect(t, contains(things[:], a))
 	testing.expect(t, contains(things[:], b))
 }
 
-// >------------------------------------------------------------ Current Thing
+// >-------------------------------------------------------------- Current Thing
 
 @(test)
 query_has_and_get_part_read_the_current_thing :: proc(t: ^testing.T) {
@@ -186,7 +186,7 @@ query_has_and_get_part_read_the_current_thing :: proc(t: ^testing.T) {
 	}
 }
 
-// >------------------------------------------------------------------- Misuse
+// >--------------------------------------------------------------------- Misuse
 
 @(test)
 query_with_nothing_asserts :: proc(t: ^testing.T) {

@@ -31,10 +31,10 @@ Part_Set :: struct {
 	allocator:      mem.Allocator,
 }
 
-Part_Pool :: struct($P: typeid) where intrinsics.type_is_enum(P) {
-	sets:       [P]Part_Set,
-	types:      [P]typeid,
-	registered: bit_set[P],
+Part_Pool :: struct($K: typeid) where intrinsics.type_is_enum(K) {
+	sets:       [K]Part_Set,
+	types:      [K]typeid,
+	registered: bit_set[K],
 	allocator:  mem.Allocator,
 }
 
@@ -160,30 +160,30 @@ part_set_get_things :: proc(set: ^Part_Set) -> []Thing {
 
 // >------------------------------------------------------------------ Part_Pool
 
-part_pool_init :: proc(pool: ^Part_Pool($P), allocator: mem.Allocator = context.allocator) {
-	pool^ = Part_Pool(P) {
+part_pool_init :: proc(pool: ^Part_Pool($K), allocator: mem.Allocator = context.allocator) {
+	pool^ = Part_Pool(K) {
 		allocator = allocator,
 	}
 }
 
-part_pool_destroy :: proc(pool: ^Part_Pool($P)) {
+part_pool_destroy :: proc(pool: ^Part_Pool($K)) {
 	for kind in pool.registered {
 		part_set_destroy(&pool.sets[kind])
 	}
 
-	pool^ = Part_Pool(P){}
+	pool^ = Part_Pool(K){}
 }
 
 // Keeps the registrations.
-part_pool_reset :: proc(pool: ^Part_Pool($P)) {
+part_pool_reset :: proc(pool: ^Part_Pool($K)) {
 	for kind in pool.registered {
 		part_set_reset(&pool.sets[kind])
 	}
 }
 
 part_pool_register :: proc(
-	pool: ^Part_Pool($P),
-	kind: P,
+	pool: ^Part_Pool($K),
+	kind: K,
 	$T: typeid,
 	destroy: proc(part: rawptr) = nil,
 ) {
@@ -195,17 +195,17 @@ part_pool_register :: proc(
 	part_set_init(&pool.sets[kind], type_info_of(T), destroy, pool.allocator)
 }
 
-part_pool_is_registered :: proc(pool: ^Part_Pool($P), kind: P) -> bool {
+part_pool_is_registered :: proc(pool: ^Part_Pool($K), kind: K) -> bool {
 	return kind in pool.registered
 }
 
 @(disabled = ODIN_DISABLE_ASSERT)
-part_pool_assert_registered :: proc(pool: ^Part_Pool($P), kind: P, loc := #caller_location) {
+part_pool_assert_registered :: proc(pool: ^Part_Pool($K), kind: K, loc := #caller_location) {
 	fmt.assertf(kind in pool.registered, "Part kind %v is not registered.", kind, loc = loc)
 }
 
 @(disabled = ODIN_DISABLE_ASSERT)
-part_pool_assert_type :: proc(pool: ^Part_Pool($P), kind: P, $T: typeid, loc := #caller_location) {
+part_pool_assert_type :: proc(pool: ^Part_Pool($K), kind: K, $T: typeid, loc := #caller_location) {
 	part_pool_assert_registered(pool, kind, loc)
 	fmt.assertf(
 		pool.types[kind] == T,
@@ -217,51 +217,51 @@ part_pool_assert_type :: proc(pool: ^Part_Pool($P), kind: P, $T: typeid, loc := 
 	)
 }
 
-part_pool_count_parts :: proc(pool: ^Part_Pool($P), kind: P) -> int {
+part_pool_count_parts :: proc(pool: ^Part_Pool($K), kind: K) -> int {
 	part_pool_assert_registered(pool, kind)
 	return pool.sets[kind].parts_size
 }
 
-part_pool_has :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P) -> bool {
+part_pool_has :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K) -> bool {
 	part_pool_assert_registered(pool, kind)
 	return part_set_has(&pool.sets[kind], thing)
 }
 
 // Returns nil when the thing does not have the part.
-part_pool_get :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P, $T: typeid) -> ^T {
+part_pool_get :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, $T: typeid) -> ^T {
 	part_pool_assert_type(pool, kind, T)
 	return cast(^T)part_set_get(&pool.sets[kind], thing)
 }
 
 // Assumes the thing has the part.
-part_pool_get_unchecked :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P, $T: typeid) -> ^T {
+part_pool_get_unchecked :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, $T: typeid) -> ^T {
 	part_pool_assert_type(pool, kind, T)
 	return cast(^T)part_set_get_unchecked(&pool.sets[kind], thing)
 }
 
-part_pool_get_parts :: proc(pool: ^Part_Pool($P), kind: P, $T: typeid) -> []T {
+part_pool_get_parts :: proc(pool: ^Part_Pool($K), kind: K, $T: typeid) -> []T {
 	part_pool_assert_type(pool, kind, T)
 
 	set := &pool.sets[kind]
 	return ([^]T)(raw_data(set.parts_data))[:set.parts_size]
 }
 
-part_pool_get_things :: proc(pool: ^Part_Pool($P), kind: P) -> []Thing {
+part_pool_get_things :: proc(pool: ^Part_Pool($K), kind: K) -> []Thing {
 	part_pool_assert_registered(pool, kind)
 	return part_set_get_things(&pool.sets[kind])
 }
 
 // Inserts the part, or overwrites the one the thing already has.
-part_pool_set_value :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P, part: $T) -> ^T {
+part_pool_set_value :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: $T) -> ^T {
 	part := part
 	return part_pool_set_pointer(pool, thing, kind, &part)
 }
 
 // Assumes the thing does not have the part yet.
 part_pool_set_value_unchecked :: proc(
-	pool: ^Part_Pool($P),
+	pool: ^Part_Pool($K),
 	thing: Thing,
-	kind: P,
+	kind: K,
 	part: $T,
 ) -> ^T {
 	part := part
@@ -269,16 +269,16 @@ part_pool_set_value_unchecked :: proc(
 }
 
 // Inserts the part, or overwrites the one the thing already has. A nil `part` zeroes it.
-part_pool_set_pointer :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P, part: ^$T) -> ^T {
+part_pool_set_pointer :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: ^$T) -> ^T {
 	part_pool_assert_type(pool, kind, T)
 	return cast(^T)part_set_insert(&pool.sets[kind], thing, part)
 }
 
 // Assumes the thing does not have the part yet. A nil `part` zeroes it.
 part_pool_set_pointer_unchecked :: proc(
-	pool: ^Part_Pool($P),
+	pool: ^Part_Pool($K),
 	thing: Thing,
-	kind: P,
+	kind: K,
 	part: ^$T,
 ) -> ^T {
 	part_pool_assert_type(pool, kind, T)
@@ -286,35 +286,35 @@ part_pool_set_pointer_unchecked :: proc(
 }
 
 // Untyped `set_pointer`, `part` has to point to a value of the registered type.
-part_pool_set_raw :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P, part: rawptr) -> rawptr {
+part_pool_set_raw :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: rawptr) -> rawptr {
 	part_pool_assert_registered(pool, kind)
 	return part_set_insert(&pool.sets[kind], thing, part)
 }
 
 // Untyped `set_pointer_unchecked`, `part` has to point to a value of the registered type.
 part_pool_set_raw_unchecked :: proc(
-	pool: ^Part_Pool($P),
+	pool: ^Part_Pool($K),
 	thing: Thing,
-	kind: P,
+	kind: K,
 	part: rawptr,
 ) -> rawptr {
 	part_pool_assert_registered(pool, kind)
 	return part_set_insert_unchecked(&pool.sets[kind], thing, part)
 }
 
-part_pool_remove :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P) -> bool {
+part_pool_remove :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K) -> bool {
 	part_pool_assert_registered(pool, kind)
 	return part_set_remove(&pool.sets[kind], thing)
 }
 
 // Assumes the thing has the part.
-part_pool_remove_unchecked :: proc(pool: ^Part_Pool($P), thing: Thing, kind: P) {
+part_pool_remove_unchecked :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K) {
 	part_pool_assert_registered(pool, kind)
 	part_set_remove_unchecked(&pool.sets[kind], thing)
 }
 
 // Tries every registered kind. When the kinds of the thing are known, prefer `remove_unchecked`.
-part_pool_remove_all :: proc(pool: ^Part_Pool($P), thing: Thing) {
+part_pool_remove_all :: proc(pool: ^Part_Pool($K), thing: Thing) {
 	for kind in pool.registered {
 		part_set_remove(&pool.sets[kind], thing)
 	}

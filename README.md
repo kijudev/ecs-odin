@@ -1,10 +1,10 @@
 # Minimal ECS in Odin
 
-Entities are things, components are parts and systems stay systems. I just like this naming conventions.
+Entities are things, components are parts, resources are stashes and systems stay systems. I just like this naming conventions.
 
 ## Layout
 
-- [`ecs`](ecs/README.md) - handles, things, parts, archetypes, command buffers and the world.
+- [`ecs`](ecs/README.md) - handles, things, parts, stashes, archetypes, command buffers and the world.
 - `tests` - the test package, run with `odin test tests`.
 
 ## Features I aspire to build

@@ -2,15 +2,29 @@ package ecs_tests
 
 import ecs "../ecs"
 
-// >---------------------------------------------------------------------- Parts
+// >---------------------------------------------------------------------- Kinds
 
-Part :: enum {
+// Parts and stashes share one enum. Which one a kind is depends on how it gets registered.
+Kind :: enum {
+	// Parts
 	Position,
 	Velocity,
 	Health,
 	Tag,
 	Target, // shares the Position type
+
+	// Stashes
+	Time,
+	Gravity,
+	Flag,
+	Big,
+	Marker,
 }
+
+PARTS :: bit_set[Kind]{.Position, .Velocity, .Health, .Tag, .Target}
+STASHES :: bit_set[Kind]{.Time, .Gravity, .Flag, .Big, .Marker}
+
+// >---------------------------------------------------------------------- Parts
 
 Position :: struct {
 	x, y: f32,
@@ -37,15 +51,7 @@ count_destroyed :: proc(part: rawptr) {
 	destroyed_count += 1
 }
 
-// >------------------------------------------------------------------ Resources
-
-Resource :: enum {
-	Time,
-	Gravity,
-	Flag,
-	Big,
-	Marker,
-}
+// >-------------------------------------------------------------------- Stashes
 
 Time :: struct {
 	delta:   f32,
@@ -53,14 +59,14 @@ Time :: struct {
 }
 
 @(thread_local)
-destroyed_resources: [Resource]int
+destroyed_stashes: [Kind]int
 
-count_destroyed_time :: proc(resource: rawptr) {
-	destroyed_resources[.Time] += 1
+count_destroyed_time :: proc(stash: rawptr) {
+	destroyed_stashes[.Time] += 1
 }
 
-count_destroyed_gravity :: proc(resource: rawptr) {
-	destroyed_resources[.Gravity] += 1
+count_destroyed_gravity :: proc(stash: rawptr) {
+	destroyed_stashes[.Gravity] += 1
 }
 
 // >-------------------------------------------------------------------- Systems
@@ -93,9 +99,9 @@ system_log_count :: proc(id: int) -> int {
 
 // >------------------------------------------------------------------- Typedefs
 
-Part_Pool :: ecs.Part_Pool(Part)
-Cmd_Buffer :: ecs.Cmd_Buffer(Part)
-World :: ecs.World(Part, Resource, Stage)
-System_Pool :: ecs.System_Pool(Part, Resource, Stage)
-System :: ecs.System_Info(Part, Resource, Stage)
-Stuff :: ecs.Stuff(Part, Resource, Stage)
+Part_Pool :: ecs.Part_Pool(Kind)
+Cmd_Buffer :: ecs.Cmd_Buffer(Kind)
+World :: ecs.World(Kind, Stage)
+System_Pool :: ecs.System_Pool(Kind, Stage)
+System :: ecs.System_Info(Kind, Stage)
+Stuff :: ecs.Stuff(Kind, Stage)

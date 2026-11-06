@@ -8,10 +8,10 @@ import ecs "../ecs"
 @(private = "file")
 make_world :: proc(world: ^World) {
 	ecs.world_init(world, ecs.THING_POOL_MIN_CAPACITY)
-	ecs.world_register(world, .Position, Position)
-	ecs.world_register(world, .Velocity, Velocity, count_destroyed)
-	ecs.world_register(world, .Tag, Tag)
-	ecs.world_register(world, .Target, Position)
+	ecs.world_register_part(world, .Position, Position)
+	ecs.world_register_part(world, .Velocity, Velocity, count_destroyed)
+	ecs.world_register_part(world, .Tag, Tag)
+	ecs.world_register_part(world, .Target, Position)
 }
 
 // >------------------------------------------------------------------ Lifecycle
@@ -23,7 +23,7 @@ init_creates_empty_world :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	testing.expect_value(t, ecs.world_count_alive(&world), 0)
-	testing.expect(t, ecs.world_is_registered(&world, .Position))
+	testing.expect(t, ecs.world_is_part_registered(&world, .Position))
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 0)
 }
 
@@ -42,9 +42,9 @@ every_pool_allocates_with_pool_allocator :: proc(t: ^testing.T) {
 		ecs.THING_POOL_MIN_CAPACITY,
 		pool_allocator = mem.tracking_allocator(&track),
 	)
-	ecs.world_register(&world, .Position, Position)
-	ecs.world_register(&world, .Velocity, Velocity)
-	ecs.world_register_resource(&world, .Time, Time)
+	ecs.world_register_part(&world, .Position, Position)
+	ecs.world_register_part(&world, .Velocity, Velocity)
+	ecs.world_register_stash(&world, .Time, Time)
 
 	// Grow the part sets, their pages and the command buffer past their first allocation.
 	for _ in 0 ..< 32 {
@@ -87,7 +87,7 @@ reset_kills_everything_keeps_registrations :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.world_is_alive(&world, thing))
 	testing.expect_value(t, ecs.world_count_alive(&world), 0)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 0)
-	testing.expect(t, ecs.world_is_registered(&world, .Position))
+	testing.expect(t, ecs.world_is_part_registered(&world, .Position))
 
 	// Reused idx must not inherit the old mask.
 	again := ecs.world_spawn(&world)
@@ -591,56 +591,56 @@ apply_buffer_leaves_own_cmds_pending :: proc(t: ^testing.T) {
 	testing.expect_value(t, ecs.world_count_cmds(&world), 1)
 }
 
-// >------------------------------------------------------------------ Resources
+// >-------------------------------------------------------------------- Stashes
 
 @(test)
-register_resource_and_get :: proc(t: ^testing.T) {
+register_stash_and_get :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
 
-	testing.expect(t, !ecs.world_is_resource_registered(&world, .Time))
-	ecs.world_register_resource(&world, .Time, Time)
-	testing.expect(t, ecs.world_is_resource_registered(&world, .Time))
+	testing.expect(t, !ecs.world_is_stash_registered(&world, .Time))
+	ecs.world_register_stash(&world, .Time, Time)
+	testing.expect(t, ecs.world_is_stash_registered(&world, .Time))
 
-	time := ecs.world_get_resource(&world, .Time, Time)
+	time := ecs.world_get_stash(&world, .Time, Time)
 	testing.expect_value(t, time^, Time{})
 
 	time.delta = 0.5
-	testing.expect_value(t, ecs.world_get_resource(&world, .Time, Time)^, Time{0.5, 0})
+	testing.expect_value(t, ecs.world_get_stash(&world, .Time, Time)^, Time{0.5, 0})
 }
 
 @(test)
-reset_zeroes_resources_keeps_registrations :: proc(t: ^testing.T) {
+reset_zeroes_stashes_keeps_registrations :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
 	defer ecs.world_destroy(&world)
 
-	ecs.world_register_resource(&world, .Time, Time, count_destroyed_time)
-	ecs.world_register_resource(&world, .Gravity, f32)
-	ecs.world_get_resource(&world, .Time, Time)^ = {1, 2}
-	ecs.world_get_resource(&world, .Gravity, f32)^ = 9.81
+	ecs.world_register_stash(&world, .Time, Time, count_destroyed_time)
+	ecs.world_register_stash(&world, .Gravity, f32)
+	ecs.world_get_stash(&world, .Time, Time)^ = {1, 2}
+	ecs.world_get_stash(&world, .Gravity, f32)^ = 9.81
 
-	destroyed_resources = {}
+	destroyed_stashes = {}
 	ecs.world_reset(&world)
 
-	testing.expect_value(t, destroyed_resources[.Time], 1)
-	testing.expect(t, ecs.world_is_resource_registered(&world, .Time))
-	testing.expect(t, ecs.world_is_resource_registered(&world, .Gravity))
-	testing.expect_value(t, ecs.world_get_resource(&world, .Time, Time)^, Time{})
-	testing.expect_value(t, ecs.world_get_resource(&world, .Gravity, f32)^, 0)
+	testing.expect_value(t, destroyed_stashes[.Time], 1)
+	testing.expect(t, ecs.world_is_stash_registered(&world, .Time))
+	testing.expect(t, ecs.world_is_stash_registered(&world, .Gravity))
+	testing.expect_value(t, ecs.world_get_stash(&world, .Time, Time)^, Time{})
+	testing.expect_value(t, ecs.world_get_stash(&world, .Gravity, f32)^, 0)
 }
 
 @(test)
-destroy_runs_resource_destroy_fns :: proc(t: ^testing.T) {
+destroy_runs_stash_destroy_fns :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
-	ecs.world_register_resource(&world, .Time, Time, count_destroyed_time)
+	ecs.world_register_stash(&world, .Time, Time, count_destroyed_time)
 
-	destroyed_resources = {}
+	destroyed_stashes = {}
 	ecs.world_destroy(&world)
 
-	testing.expect_value(t, destroyed_resources[.Time], 1)
+	testing.expect_value(t, destroyed_stashes[.Time], 1)
 }
 
 // >-------------------------------------------------------------------- Systems
@@ -678,6 +678,24 @@ run_goes_through_stages_in_order :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(system_log), 3)
 	testing.expect(t, system_log_index(0) < system_log_index(1))
 	testing.expect(t, system_log_index(1) < system_log_index(2))
+}
+
+@(test)
+run_orders_systems_on_stashes :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+	ecs.world_register_stash(&world, .Time, Time)
+
+	// Without a conflict b would run first, the stash kind is the only thing ordering them.
+	ecs.world_schedule(&world, system_a, .Update, {}, {.Time})
+	ecs.world_schedule(&world, system_b, .Update, {.Time}, {})
+
+	clear(&system_log)
+	ecs.world_run_stage_sync(&world, .Update)
+
+	testing.expect_value(t, len(system_log), 2)
+	testing.expect(t, system_log_index(0) < system_log_index(1), "a before b")
 }
 
 @(test)
@@ -766,7 +784,7 @@ set_later_wrong_type_asserts_when_recording :: proc(t: ^testing.T) {
 
 	world: World
 	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
-	ecs.world_register(&world, .Target, Position)
+	ecs.world_register_part(&world, .Target, Position)
 	thing := ecs.world_spawn(&world)
 
 	testing.expect_assert_message(t, "Part kind Target is a Position, not a Velocity.")
@@ -775,7 +793,7 @@ set_later_wrong_type_asserts_when_recording :: proc(t: ^testing.T) {
 }
 
 @(test)
-get_resource_wrong_type_asserts :: proc(t: ^testing.T) {
+get_stash_wrong_type_asserts :: proc(t: ^testing.T) {
 	// Nothing to check when asserts are compiled out.
 	when ODIN_DISABLE_ASSERT do return
 
@@ -786,15 +804,15 @@ get_resource_wrong_type_asserts :: proc(t: ^testing.T) {
 
 	world: World
 	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
-	ecs.world_register_resource(&world, .Gravity, f32)
+	ecs.world_register_stash(&world, .Gravity, f32)
 
-	testing.expect_assert_message(t, "Resource Gravity is a f32, not a f64.")
-	ecs.world_get_resource(&world, .Gravity, f64)
+	testing.expect_assert_message(t, "Stash kind Gravity is a f32, not a f64.")
+	ecs.world_get_stash(&world, .Gravity, f64)
 	testing.fail_now(t, "The call did not assert.")
 }
 
 @(test)
-get_resource_unregistered_asserts :: proc(t: ^testing.T) {
+get_stash_unregistered_asserts :: proc(t: ^testing.T) {
 	// Nothing to check when asserts are compiled out.
 	when ODIN_DISABLE_ASSERT do return
 
@@ -806,7 +824,45 @@ get_resource_unregistered_asserts :: proc(t: ^testing.T) {
 	world: World
 	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
 
-	testing.expect_assert_message(t, "Resource Time is not registered in the pool.")
-	ecs.world_get_resource(&world, .Time, Time)
+	testing.expect_assert_message(t, "Stash kind Time is not registered.")
+	ecs.world_get_stash(&world, .Time, Time)
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+register_stash_kind_as_part_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
+	@(static) backing: [512 * mem.Kilobyte]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	world: World
+	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+	ecs.world_register_stash(&world, .Time, Time)
+
+	testing.expect_assert_message(t, "Kind Time is already registered as a stash.")
+	ecs.world_register_part(&world, .Time, Time)
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+register_part_kind_as_stash_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
+	@(static) backing: [512 * mem.Kilobyte]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	world: World
+	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+	ecs.world_register_part(&world, .Position, Position)
+
+	testing.expect_assert_message(t, "Kind Position is already registered as a part.")
+	ecs.world_register_stash(&world, .Position, Position)
 	testing.fail_now(t, "The call did not assert.")
 }

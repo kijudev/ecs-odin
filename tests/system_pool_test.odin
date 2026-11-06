@@ -119,8 +119,8 @@ system_pool_schedule_stores_the_system :: proc(t: ^testing.T) {
 
 	systems := pool.systems[.Update][:]
 	testing.expect_value(t, len(systems), 1)
-	testing.expect_value(t, systems[0].reads, bit_set[Part]{.Velocity})
-	testing.expect_value(t, systems[0].writes, bit_set[Part]{.Position})
+	testing.expect_value(t, systems[0].reads, bit_set[Kind]{.Velocity})
+	testing.expect_value(t, systems[0].writes, bit_set[Kind]{.Position})
 	testing.expect_value(t, systems[0].stage, Stage.Update)
 	testing.expect(t, systems[0].system == system_a)
 }

@@ -6,7 +6,6 @@ import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
 
-// Page count and size are compile-time constants, so the page table lives inline in the struct.
 Inline_Paged_Array :: struct($T: typeid, $PAGE_COUNT: int, $PAGE_SIZE: int) where size_of(T) > 0,
 	PAGE_COUNT > 0,
 	PAGE_SIZE > 0,
@@ -15,7 +14,6 @@ Inline_Paged_Array :: struct($T: typeid, $PAGE_COUNT: int, $PAGE_SIZE: int) wher
 	allocator: mem.Allocator,
 }
 
-// Page count and size are chosen in `paged_array_init`, the page table is allocated there.
 Paged_Array :: struct($T: typeid) where size_of(T) > 0 {
 	pages:      [][^]T,
 	page_size:  int,
@@ -39,7 +37,6 @@ inline_paged_array_destroy :: proc(arr: ^Inline_Paged_Array($T, $C, $S)) {
 	arr^ = Inline_Paged_Array(T, C, S){}
 }
 
-// Zeroes every allocated page and keeps it, so refilling does not allocate again.
 inline_paged_array_reset :: proc(arr: ^Inline_Paged_Array($T, $C, $S)) {
 	pages_zero_all(arr.pages[:], S)
 }
@@ -57,31 +54,26 @@ inline_paged_array_has_page :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: i
 	return arr.pages[page] != nil
 }
 
-// Returns nil when the page is not allocated.
 inline_paged_array_get_page :: proc(arr: ^Inline_Paged_Array($T, $C, $S), page: int) -> []T {
 	check_page(page, C)
 	return page_slice(arr.pages[page], S)
 }
 
-// Returns the zero value when the page of `idx` is not allocated.
 inline_paged_array_get :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: int) -> T {
 	page, offset := locate(idx, intrinsics.constant_log2(S), C * S)
 	return page_get(arr.pages[page], offset)
 }
 
-// Returns nil when the page of `idx` is not allocated.
 inline_paged_array_get_ptr :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: int) -> ^T {
 	page, offset := locate(idx, intrinsics.constant_log2(S), C * S)
 	return page_get_ptr(arr.pages[page], offset)
 }
 
-// Assumes the page of `idx` is allocated.
 inline_paged_array_get_unchecked :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: int) -> T {
 	page, offset := locate(idx, intrinsics.constant_log2(S), C * S)
 	return arr.pages[page][offset]
 }
 
-// Allocates the page of `idx` if needed.
 inline_paged_array_ensure :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: int) -> ^T {
 	page, offset := locate(idx, intrinsics.constant_log2(S), C * S)
 	return &page_ensure(&arr.pages[page], S, arr.allocator)[offset]
@@ -91,7 +83,6 @@ inline_paged_array_set :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: int, v
 	inline_paged_array_ensure(arr, idx)^ = value
 }
 
-// Assumes the page of `idx` is allocated.
 inline_paged_array_set_unchecked :: proc(
 	arr: ^Inline_Paged_Array($T, $C, $S),
 	idx: int,
@@ -133,7 +124,6 @@ paged_array_destroy :: proc(arr: ^Paged_Array($T)) {
 	arr^ = Paged_Array(T){}
 }
 
-// Zeroes every allocated page and keeps it, so refilling does not allocate again.
 paged_array_reset :: proc(arr: ^Paged_Array($T)) {
 	pages_zero_all(arr.pages, arr.page_size)
 }
@@ -151,31 +141,26 @@ paged_array_has_page :: proc(arr: ^Paged_Array($T), idx: int) -> bool {
 	return arr.pages[page] != nil
 }
 
-// Returns nil when the page is not allocated.
 paged_array_get_page :: proc(arr: ^Paged_Array($T), page: int) -> []T {
 	check_page(page, len(arr.pages))
 	return page_slice(arr.pages[page], arr.page_size)
 }
 
-// Returns the zero value when the page of `idx` is not allocated.
 paged_array_get :: proc(arr: ^Paged_Array($T), idx: int) -> T {
 	page, offset := locate(idx, arr.page_shift, paged_array_capacity(arr))
 	return page_get(arr.pages[page], offset)
 }
 
-// Returns nil when the page of `idx` is not allocated.
 paged_array_get_ptr :: proc(arr: ^Paged_Array($T), idx: int) -> ^T {
 	page, offset := locate(idx, arr.page_shift, paged_array_capacity(arr))
 	return page_get_ptr(arr.pages[page], offset)
 }
 
-// Assumes the page of `idx` is allocated.
 paged_array_get_unchecked :: proc(arr: ^Paged_Array($T), idx: int) -> T {
 	page, offset := locate(idx, arr.page_shift, paged_array_capacity(arr))
 	return arr.pages[page][offset]
 }
 
-// Allocates the page of `idx` if needed.
 paged_array_ensure :: proc(arr: ^Paged_Array($T), idx: int) -> ^T {
 	page, offset := locate(idx, arr.page_shift, paged_array_capacity(arr))
 	return &page_ensure(&arr.pages[page], arr.page_size, arr.allocator)[offset]
@@ -185,7 +170,6 @@ paged_array_set :: proc(arr: ^Paged_Array($T), idx: int, value: T) {
 	paged_array_ensure(arr, idx)^ = value
 }
 
-// Assumes the page of `idx` is allocated.
 paged_array_set_unchecked :: proc(arr: ^Paged_Array($T), idx: int, value: T) {
 	page, offset := locate(idx, arr.page_shift, paged_array_capacity(arr))
 	arr.pages[page][offset] = value
