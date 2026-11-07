@@ -7,6 +7,13 @@ import "core:mem"
 
 // >---------------------------------------------------------------------- Utils
 
+/*
+Gathers `src` into `dst` by the permutation: `dst[i] = src[perm[i]]`. `src` and `dst` must not
+overlap.
+
+Asserts:
+- `src`, `dst` and `perm` have the same length.
+*/
 sort_apply_perm :: proc(perm: []$I, src, dst: []$T) where intrinsics.type_is_integer(I) {
 	fmt.assertf(
 		len(src) == len(dst),
@@ -27,6 +34,14 @@ sort_apply_perm :: proc(perm: []$I, src, dst: []$T) where intrinsics.type_is_int
 
 // >-------------------------------------------------------------- Radix Argsort
 
+/*
+Fills `perm` with the indices of `keys` in ascending key order, without moving `keys`. The sort is
+stable, so equal keys keep their order. `I` has to fit `len(keys) - 1`. Scratch memory comes
+from the temp allocator.
+
+Asserts:
+- `keys` and `perm` have the same length.
+*/
 sort_argsort_u32 :: proc(keys: []u32, perm: []$I) where intrinsics.type_is_integer(I) {
 	fmt.assertf(
 		len(keys) == len(perm),

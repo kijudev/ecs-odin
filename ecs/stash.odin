@@ -8,6 +8,10 @@ import "core:mem"
 
 STASH_POOL_DEFAULT_CAPACITY :: 1 << 16
 
+/*
+Keeps one value per stash kind, packed into a single buffer allocated up front. The buffer never
+moves, so pointers to stashes stay valid until `destroy`.
+*/
 Stash_Pool :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	stashes_data:     []byte,
 	stashes_size:     int,
@@ -21,6 +25,12 @@ Stash_Pool :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 
 // >----------------------------------------------------------------- Stash_Pool
 
+/*
+Initializes the pool with `capacity` bytes for stashes, allocated up front with `allocator`.
+
+Asserts:
+- `capacity` is not negative.
+*/
 stash_pool_init :: proc(
 	pool: ^Stash_Pool($K),
 	capacity: int = STASH_POOL_DEFAULT_CAPACITY,
@@ -40,6 +50,10 @@ stash_pool_init :: proc(
 	}
 }
 
+/*
+Runs `destroy` on every stash, frees the pool with the allocator it was initialized with and
+zeroes it.
+*/
 stash_pool_destroy :: proc(pool: ^Stash_Pool($K)) {
 	destroy_all(pool)
 
@@ -47,11 +61,22 @@ stash_pool_destroy :: proc(pool: ^Stash_Pool($K)) {
 	pool^ = {}
 }
 
+/* Runs `destroy` on every stash and zeroes them. The kinds stay registered. */
 stash_pool_reset :: proc(pool: ^Stash_Pool($K)) {
 	destroy_all(pool)
 	mem.zero_slice(pool.stashes_data[:pool.stashes_size])
 }
 
+/*
+Registers `kind` as a stash of type `T`, placed after the last stash and aligned for `T`. The
+stash starts zeroed. `destroy` runs on it on reset and destroy.
+
+Asserts:
+- `kind` is not registered yet.
+
+Panics:
+- the stash doesn't fit in the remaining capacity.
+*/
 stash_pool_register :: proc(
 	pool: ^Stash_Pool($K),
 	kind: K,
@@ -86,10 +111,12 @@ stash_pool_register :: proc(
 	pool.registered += {kind}
 }
 
+/* Checks whether `kind` is registered. */
 stash_pool_is_registered :: proc(pool: ^Stash_Pool($K), kind: K) -> bool {
 	return kind in pool.registered
 }
 
+/* Asserts that `kind` is registered, reporting `loc`. Disabled with ODIN_DISABLE_ASSERT. */
 @(disabled = ODIN_DISABLE_ASSERT)
 stash_pool_assert_registered :: proc(
 	pool: ^Stash_Pool($K),
@@ -104,6 +131,10 @@ stash_pool_assert_registered :: proc(
 	)
 }
 
+/*
+Asserts that `kind` is registered with type `T`, reporting `loc`. Disabled with
+ODIN_DISABLE_ASSERT.
+*/
 @(disabled = ODIN_DISABLE_ASSERT)
 stash_pool_assert_type :: proc(
 	pool: ^Stash_Pool($K),
@@ -122,6 +153,15 @@ stash_pool_assert_type :: proc(
 	)
 }
 
+/*
+Gets the stash.
+
+The pointer is valid until the pool is destroyed.
+
+Asserts:
+- `kind` is registered.
+- `T` is the type `kind` was registered with.
+*/
 stash_pool_get :: proc(pool: ^Stash_Pool($K), kind: K, $T: typeid) -> ^T {
 	stash_pool_assert_type(pool, kind, T)
 	return cast(^T)get_raw(pool, kind)

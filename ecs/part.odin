@@ -18,6 +18,11 @@ PART_MAX_COUNT :: 128
 Part_Idx :: u32
 Part_Set_Indices :: Inline_Paged_Array(Part_Idx, PART_SET_PAGE_COUNT, PART_SET_PAGE_SIZE)
 
+/*
+Stores the parts of one kind as a sparse set: `indices` maps `thing.idx` to a slot in the packed
+`things` and `parts_data` arrays. The part type is erased, only its size and alignment are kept.
+Removing moves the last part into the hole, so the order of parts changes.
+*/
 Part_Set :: struct {
 	part_size:      int,
 	part_align:     int,
@@ -30,6 +35,10 @@ Part_Set :: struct {
 	allocator:      mem.Allocator,
 }
 
+/*
+Holds a part set per kind, plus the type each kind was registered with. A kind has to be
+registered before use.
+*/
 Part_Pool :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	sets:       [K]Part_Set,
 	types:      [K]typeid,
@@ -42,6 +51,14 @@ Part_Zero_Sized: byte
 
 // >------------------------------------------------------------------- Part_Set
 
+/*
+Initializes the set for parts of the type described by `part_info`. `destroy` runs on a part
+whenever the set drops it: on remove, overwrite, reset and destroy. Nothing is allocated until
+the first insert.
+
+Asserts:
+- `part_info` is not nil.
+*/
 part_set_init :: proc(
 	set: ^Part_Set,
 	part_info: ^runtime.Type_Info,
@@ -65,6 +82,10 @@ part_set_init :: proc(
 	inline_paged_array_init(&set.indices, allocator)
 }
 
+/*
+Runs `destroy` on every part, frees the set with the allocator it was initialized with and
+zeroes it.
+*/
 part_set_destroy :: proc(set: ^Part_Set) {
 	parts_destroy_all(set)
 	inline_paged_array_destroy(&set.indices)
@@ -74,17 +95,29 @@ part_set_destroy :: proc(set: ^Part_Set) {
 	set^ = Part_Set{}
 }
 
+/* Runs `destroy` on every part and removes them all, keeping the allocated memory. */
 part_set_reset :: proc(set: ^Part_Set) {
 	parts_destroy_all(set)
 	inline_paged_array_reset(&set.indices)
 	set.parts_size = 0
 }
 
+/*
+Checks whether the thing has a part in the set.
+
+Returns false for a stale thing whose slot was reused.
+*/
 part_set_has :: proc(set: ^Part_Set, thing: Thing) -> bool {
 	_, ok := dense_idx(set, thing)
 	return ok
 }
 
+/*
+Gets the thing's part.
+
+Returns nil if the thing doesn't have the part. The pointer is valid until a part is inserted
+into or removed from the set.
+*/
 part_set_get :: proc(set: ^Part_Set, thing: Thing) -> rawptr {
 	idx, ok := dense_idx(set, thing)
 	if !ok do return nil
@@ -92,10 +125,28 @@ part_set_get :: proc(set: ^Part_Set, thing: Thing) -> rawptr {
 	return parts_get_unchecked(set, idx)
 }
 
+/*
+Gets the thing's part without checking it. The thing has to have the part, otherwise the pointer
+is garbage.
+
+The pointer is valid until a part is inserted into or removed from the set.
+*/
 part_set_get_unchecked :: proc(set: ^Part_Set, thing: Thing) -> rawptr {
 	return parts_get_unchecked(set, dense_idx_unchecked(set, thing))
 }
 
+/*
+Inserts a copy of the part, or overwrites the one the thing already has. A nil `part` inserts a
+zeroed one. `destroy` runs on the overwritten part, unless `part` points to it.
+
+Returns a pointer to the part in the set, valid until a part is inserted into or removed from
+the set.
+
+Asserts:
+- `thing` is not THING_NIL.
+- no other thing with the same `idx` has a part in the set.
+- the set is not full, when the part is new.
+*/
 part_set_insert :: proc(set: ^Part_Set, thing: Thing, part: rawptr = nil) -> rawptr {
 	assert(thing != THING_NIL, "Cannot insert a part for THING_NIL.")
 
@@ -103,7 +154,13 @@ part_set_insert :: proc(set: ^Part_Set, thing: Thing, part: rawptr = nil) -> raw
 	if entry == 0 do return part_set_insert_unchecked(set, thing, part)
 
 	idx := int(entry - 1)
-	set.things[idx] = thing
+	fmt.assertf(
+		set.things[idx] == thing,
+		"Cannot insert a part: slot %v belongs to gen %v, not gen %v.",
+		thing.idx,
+		set.things[idx].gen,
+		thing.gen,
+	)
 
 	result := parts_get_unchecked(set, idx)
 	if result == part do return result
@@ -114,6 +171,18 @@ part_set_insert :: proc(set: ^Part_Set, thing: Thing, part: rawptr = nil) -> raw
 	return result
 }
 
+/*
+Inserts a copy of the part without checking whether the thing already has one. A nil `part`
+inserts a zeroed one. No thing with the same `idx` may have a part in the set, otherwise its part
+is left orphaned.
+
+Returns a pointer to the part in the set, valid until a part is inserted into or removed from
+the set.
+
+Asserts:
+- `thing` is not THING_NIL.
+- the set is not full.
+*/
 part_set_insert_unchecked :: proc(set: ^Part_Set, thing: Thing, part: rawptr = nil) -> rawptr {
 	assert(thing != THING_NIL, "Cannot insert a part for THING_NIL.")
 	assert(set.parts_size < PART_SET_MAX_CAPACITY, "Part set is full.")
@@ -127,6 +196,11 @@ part_set_insert_unchecked :: proc(set: ^Part_Set, thing: Thing, part: rawptr = n
 	return result
 }
 
+/*
+Removes the thing's part and runs `destroy` on it.
+
+Returns false if the thing doesn't have the part.
+*/
 part_set_remove :: proc(set: ^Part_Set, thing: Thing) -> bool {
 	if !part_set_has(set, thing) do return false
 
@@ -134,6 +208,10 @@ part_set_remove :: proc(set: ^Part_Set, thing: Thing) -> bool {
 	return true
 }
 
+/*
+Removes the thing's part without checking it and runs `destroy` on it. The thing has to have the
+part.
+*/
 part_set_remove_unchecked :: proc(set: ^Part_Set, thing: Thing) {
 	idx := dense_idx_unchecked(set, thing)
 	last_idx := set.parts_size - 1
@@ -148,22 +226,34 @@ part_set_remove_unchecked :: proc(set: ^Part_Set, thing: Thing) {
 	parts_remove_swap(set, idx)
 }
 
+/*
+Gets the raw bytes of every part, packed, in the same order as `part_set_get_things`.
+
+The slice is valid until a part is inserted into or removed from the set.
+*/
 part_set_get_parts :: proc(set: ^Part_Set) -> []byte {
 	return set.parts_data[:set.parts_size * set.part_size]
 }
 
+/*
+Gets every thing that has a part in the set, in the same order as `part_set_get_parts`.
+
+The slice is valid until a part is inserted into or removed from the set.
+*/
 part_set_get_things :: proc(set: ^Part_Set) -> []Thing {
 	return set.things[:set.parts_size]
 }
 
 // >------------------------------------------------------------------ Part_Pool
 
+/* Initializes the pool with no kinds registered. Nothing is allocated here. */
 part_pool_init :: proc(pool: ^Part_Pool($K), allocator: mem.Allocator = context.allocator) {
 	pool^ = Part_Pool(K) {
 		allocator = allocator,
 	}
 }
 
+/* Destroys the set of every registered kind and zeroes the pool. */
 part_pool_destroy :: proc(pool: ^Part_Pool($K)) {
 	for kind in pool.registered {
 		part_set_destroy(&pool.sets[kind])
@@ -172,12 +262,20 @@ part_pool_destroy :: proc(pool: ^Part_Pool($K)) {
 	pool^ = Part_Pool(K){}
 }
 
+/* Resets the set of every registered kind. The kinds stay registered. */
 part_pool_reset :: proc(pool: ^Part_Pool($K)) {
 	for kind in pool.registered {
 		part_set_reset(&pool.sets[kind])
 	}
 }
 
+/*
+Registers `kind` as a part of type `T`. `destroy` runs on a part whenever the pool drops it: on
+remove, overwrite, reset and destroy.
+
+Asserts:
+- `kind` is not registered yet.
+*/
 part_pool_register :: proc(
 	pool: ^Part_Pool($K),
 	kind: K,
@@ -192,15 +290,21 @@ part_pool_register :: proc(
 	part_set_init(&pool.sets[kind], type_info_of(T), destroy, pool.allocator)
 }
 
+/* Checks whether `kind` is registered. */
 part_pool_is_registered :: proc(pool: ^Part_Pool($K), kind: K) -> bool {
 	return kind in pool.registered
 }
 
+/* Asserts that `kind` is registered, reporting `loc`. Disabled with ODIN_DISABLE_ASSERT. */
 @(disabled = ODIN_DISABLE_ASSERT)
 part_pool_assert_registered :: proc(pool: ^Part_Pool($K), kind: K, loc := #caller_location) {
 	fmt.assertf(kind in pool.registered, "Part kind %v is not registered.", kind, loc = loc)
 }
 
+/*
+Asserts that `kind` is registered with type `T`, reporting `loc`. Disabled with
+ODIN_DISABLE_ASSERT.
+*/
 @(disabled = ODIN_DISABLE_ASSERT)
 part_pool_assert_type :: proc(pool: ^Part_Pool($K), kind: K, $T: typeid, loc := #caller_location) {
 	part_pool_assert_registered(pool, kind, loc)
@@ -214,28 +318,69 @@ part_pool_assert_type :: proc(pool: ^Part_Pool($K), kind: K, $T: typeid, loc := 
 	)
 }
 
+/*
+Counts the things that have a part of this kind.
+
+Asserts:
+- `kind` is registered.
+*/
 part_pool_count_parts :: proc(pool: ^Part_Pool($K), kind: K) -> int {
 	part_pool_assert_registered(pool, kind)
 	return pool.sets[kind].parts_size
 }
 
+/*
+Checks whether the thing has the part.
+
+Returns false for a stale thing whose slot was reused.
+
+Asserts:
+- `kind` is registered.
+*/
 part_pool_has :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K) -> bool {
 	part_pool_assert_registered(pool, kind)
 	return part_set_has(&pool.sets[kind], thing)
 }
 
-// Returns nil when the thing does not have the part.
+/*
+Gets the thing's part.
+
+Returns nil if the thing doesn't have the part. The pointer is valid until a part of this kind
+is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `T` is the type `kind` was registered with.
+*/
 part_pool_get :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, $T: typeid) -> ^T {
 	part_pool_assert_type(pool, kind, T)
 	return cast(^T)part_set_get(&pool.sets[kind], thing)
 }
 
-// Assumes the thing has the part.
+/*
+Gets the thing's part without checking it. The thing has to have the part, otherwise the pointer
+is garbage.
+
+The pointer is valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `T` is the type `kind` was registered with.
+*/
 part_pool_get_unchecked :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, $T: typeid) -> ^T {
 	part_pool_assert_type(pool, kind, T)
 	return cast(^T)part_set_get_unchecked(&pool.sets[kind], thing)
 }
 
+/*
+Gets every part of this kind, packed, in the same order as `part_pool_get_things`.
+
+The slice is valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `T` is the type `kind` was registered with.
+*/
 part_pool_get_parts :: proc(pool: ^Part_Pool($K), kind: K, $T: typeid) -> []T {
 	part_pool_assert_type(pool, kind, T)
 
@@ -243,18 +388,47 @@ part_pool_get_parts :: proc(pool: ^Part_Pool($K), kind: K, $T: typeid) -> []T {
 	return ([^]T)(raw_data(set.parts_data))[:set.parts_size]
 }
 
+/*
+Gets every thing that has a part of this kind, in the same order as `part_pool_get_parts`.
+
+The slice is valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+*/
 part_pool_get_things :: proc(pool: ^Part_Pool($K), kind: K) -> []Thing {
 	part_pool_assert_registered(pool, kind)
 	return part_set_get_things(&pool.sets[kind])
 }
 
-// Inserts the part, or overwrites the one the thing already has.
+/*
+Inserts the part, or overwrites the one the thing already has. See part_set_insert.
+
+Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `T` is the type `kind` was registered with.
+- `thing` is not THING_NIL.
+- no other thing with the same `idx` has a part of this kind.
+*/
 part_pool_set_value :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: $T) -> ^T {
 	part := part
 	return part_pool_set_pointer(pool, thing, kind, &part)
 }
 
-// Assumes the thing does not have the part yet.
+/*
+Inserts the part without checking whether the thing already has one. See
+part_set_insert_unchecked.
+
+Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `T` is the type `kind` was registered with.
+- `thing` is not THING_NIL.
+- the kind's set is not full.
+*/
 part_pool_set_value_unchecked :: proc(
 	pool: ^Part_Pool($K),
 	thing: Thing,
@@ -265,13 +439,35 @@ part_pool_set_value_unchecked :: proc(
 	return part_pool_set_pointer_unchecked(pool, thing, kind, &part)
 }
 
-// Inserts the part, or overwrites the one the thing already has. A nil `part` zeroes it.
+/*
+Inserts a copy of the part `part` points to, or overwrites the one the thing already has. A nil
+`part` zeroes it. See part_set_insert.
+
+Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `T` is the type `kind` was registered with.
+- `thing` is not THING_NIL.
+- no other thing with the same `idx` has a part of this kind.
+*/
 part_pool_set_pointer :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: ^$T) -> ^T {
 	part_pool_assert_type(pool, kind, T)
 	return cast(^T)part_set_insert(&pool.sets[kind], thing, part)
 }
 
-// Assumes the thing does not have the part yet. A nil `part` zeroes it.
+/*
+Inserts a copy of the part `part` points to without checking whether the thing already has one. A
+nil `part` inserts a zeroed one. See part_set_insert_unchecked.
+
+Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `T` is the type `kind` was registered with.
+- `thing` is not THING_NIL.
+- the kind's set is not full.
+*/
 part_pool_set_pointer_unchecked :: proc(
 	pool: ^Part_Pool($K),
 	thing: Thing,
@@ -282,13 +478,33 @@ part_pool_set_pointer_unchecked :: proc(
 	return cast(^T)part_set_insert_unchecked(&pool.sets[kind], thing, part)
 }
 
-// Untyped `set_pointer`, `part` has to point to a value of the registered type.
+/*
+Untyped `part_pool_set_pointer`: `part` has to point to a value of the registered type, or be
+nil.
+
+Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `thing` is not THING_NIL.
+- no other thing with the same `idx` has a part of this kind.
+*/
 part_pool_set_raw :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: rawptr) -> rawptr {
 	part_pool_assert_registered(pool, kind)
 	return part_set_insert(&pool.sets[kind], thing, part)
 }
 
-// Untyped `set_pointer_unchecked`, `part` has to point to a value of the registered type.
+/*
+Untyped `part_pool_set_pointer_unchecked`: `part` has to point to a value of the registered type,
+or be nil.
+
+Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
+
+Asserts:
+- `kind` is registered.
+- `thing` is not THING_NIL.
+- the kind's set is not full.
+*/
 part_pool_set_raw_unchecked :: proc(
 	pool: ^Part_Pool($K),
 	thing: Thing,
@@ -299,18 +515,35 @@ part_pool_set_raw_unchecked :: proc(
 	return part_set_insert_unchecked(&pool.sets[kind], thing, part)
 }
 
+/*
+Removes the thing's part and runs `destroy` on it.
+
+Returns false if the thing doesn't have the part.
+
+Asserts:
+- `kind` is registered.
+*/
 part_pool_remove :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K) -> bool {
 	part_pool_assert_registered(pool, kind)
 	return part_set_remove(&pool.sets[kind], thing)
 }
 
-// Assumes the thing has the part.
+/*
+Removes the thing's part without checking it and runs `destroy` on it. The thing has to have the
+part.
+
+Asserts:
+- `kind` is registered.
+*/
 part_pool_remove_unchecked :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K) {
 	part_pool_assert_registered(pool, kind)
 	part_set_remove_unchecked(&pool.sets[kind], thing)
 }
 
-// Tries every registered kind. When the kinds of the thing are known, prefer `remove_unchecked`.
+/*
+Removes the thing's part of every registered kind, trying each one. When the thing's kinds are
+known, prefer `part_pool_remove_unchecked`.
+*/
 part_pool_remove_all :: proc(pool: ^Part_Pool($K), thing: Thing) {
 	for kind in pool.registered {
 		part_set_remove(&pool.sets[kind], thing)

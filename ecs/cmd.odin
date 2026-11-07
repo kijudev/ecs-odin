@@ -8,16 +8,21 @@ import "core:mem"
 Cmd_Offset :: u32
 Cmd_Size :: u32
 
+/* The most bytes of parts a buffer holds between resets. */
 CMD_BUFFER_MAX_PARTS_SIZE :: int(max(Cmd_Offset))
+
+/* The largest part `cmd_buffer_record_set_value` accepts, in bytes. */
 CMD_PART_MAX_SIZE :: int(max(Cmd_Size))
 
 CMD_BUFFER_DEFAULT_CAPACITY :: 1 << 8
 CMD_BUFFER_DEFAULT_PARTS_CAPACITY :: 1 << 12
 
+/* Kills `thing`. */
 Cmd_Kill :: struct {
 	thing: Thing,
 }
 
+/* Sets `thing`'s part of `kind` to the `size` bytes at `offset` in the buffer's `parts`. */
 Cmd_Set_Value :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	thing:  Thing,
 	kind:   K,
@@ -25,16 +30,19 @@ Cmd_Set_Value :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	size:   Cmd_Size,
 }
 
+/* Sets `thing`'s part of `kind` to zero. */
 Cmd_Set_Zero :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	thing: Thing,
 	kind:  K,
 }
 
+/* Removes `thing`'s part of `kind`. */
 Cmd_Remove :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	thing: Thing,
 	kind:  K,
 }
 
+/* A recorded change to the world. */
 Cmd :: union($K: typeid) where intrinsics.type_is_enum(K) {
 	Cmd_Kill,
 	Cmd_Set_Value(K),
@@ -42,6 +50,10 @@ Cmd :: union($K: typeid) where intrinsics.type_is_enum(K) {
 	Cmd_Remove(K),
 }
 
+/*
+Records changes to apply to the world later, in order. Values to set are copied into `parts` and
+the commands refer to them by offset, so parts of any type share one buffer.
+*/
 Cmd_Buffer :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	cmds:      [dynamic]Cmd(K),
 	parts:     [dynamic]byte,
@@ -50,6 +62,14 @@ Cmd_Buffer :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 
 // >----------------------------------------------------------------- Cmd_Buffer
 
+/*
+Initializes the buffer with room for `capacity` commands and `parts_capacity` bytes of parts,
+allocated up front with `allocator`. Both grow as needed.
+
+Asserts:
+- `capacity` is not negative.
+- `parts_capacity` is between 0 and CMD_BUFFER_MAX_PARTS_SIZE.
+*/
 cmd_buffer_init :: proc(
 	buffer: ^Cmd_Buffer($K),
 	capacity: int = CMD_BUFFER_DEFAULT_CAPACITY,
@@ -76,22 +96,41 @@ cmd_buffer_init :: proc(
 	}
 }
 
+/* Frees the buffer and zeroes it. */
 cmd_buffer_destroy :: proc(buffer: ^Cmd_Buffer($K)) {
 	delete(buffer.cmds)
 	delete(buffer.parts)
 	buffer^ = Cmd_Buffer(K){}
 }
 
+/* Drops every recorded command and part, keeping the allocated memory. */
 cmd_buffer_reset :: proc(buffer: ^Cmd_Buffer($K)) {
 	clear(&buffer.cmds)
 	clear(&buffer.parts)
 }
 
+/*
+Records killing the thing.
+
+Asserts:
+- `thing` is not THING_NIL.
+*/
 cmd_buffer_record_kill :: proc(buffer: ^Cmd_Buffer($K), thing: Thing) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
 	record(buffer, Cmd_Kill{thing = thing})
 }
 
+/*
+Records setting the thing's part of `kind` to a copy of the `size` bytes at `part`.
+
+Asserts:
+- `thing` is not THING_NIL.
+- `size` is between 0 and CMD_PART_MAX_SIZE.
+- `part` is not nil, unless `size` is 0.
+
+Panics:
+- the parts would grow past CMD_BUFFER_MAX_PARTS_SIZE.
+*/
 cmd_buffer_record_set_value :: proc(
 	buffer: ^Cmd_Buffer($K),
 	thing: Thing,
@@ -123,16 +162,36 @@ cmd_buffer_record_set_value :: proc(
 	)
 }
 
+/*
+Records setting the thing's part of `kind` to zero.
+
+Asserts:
+- `thing` is not THING_NIL.
+*/
 cmd_buffer_record_set_zero :: proc(buffer: ^Cmd_Buffer($K), thing: Thing, kind: K) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
 	record(buffer, Cmd_Set_Zero(K){thing = thing, kind = kind})
 }
 
+/*
+Records removing the thing's part of `kind`.
+
+Asserts:
+- `thing` is not THING_NIL.
+*/
 cmd_buffer_record_remove :: proc(buffer: ^Cmd_Buffer($K), thing: Thing, kind: K) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
 	record(buffer, Cmd_Remove(K){thing = thing, kind = kind})
 }
 
+/*
+Gets the `size` bytes of parts at `offset`, as recorded by `cmd_buffer_record_set_value`.
+
+The slice is valid until the next record or reset.
+
+Asserts:
+- the range is inside the recorded parts.
+*/
 cmd_buffer_get_bytes :: proc(
 	buffer: ^Cmd_Buffer($K),
 	offset: Cmd_Offset,
@@ -146,6 +205,13 @@ cmd_buffer_get_bytes :: proc(
 	return buffer.parts[offset:][:size]
 }
 
+/*
+Gets a copy of the part of type `T` at `offset`. Parts are packed without alignment, so it is
+loaded unaligned.
+
+Asserts:
+- the part is inside the recorded parts.
+*/
 cmd_buffer_get_part :: proc(buffer: ^Cmd_Buffer($K), offset: Cmd_Offset, $T: typeid) -> T {
 	when size_of(T) == 0 {
 		return {}

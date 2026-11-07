@@ -1,5 +1,6 @@
 package ecs_tests
 
+import "core:mem"
 import "core:testing"
 
 import ecs "../ecs"
@@ -245,24 +246,56 @@ part_set_stale_thing_does_not_see_part :: proc(t: ^testing.T) {
 }
 
 @(test)
-part_set_insert_for_reused_idx_takes_over_slot :: proc(t: ^testing.T) {
+part_set_insert_asserts_for_stale_thing :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	@(static) backing: [512 * mem.Kilobyte]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+	allocator := mem.arena_allocator(&arena)
+
 	things: ecs.Thing_Pool
-	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY)
-	defer ecs.thing_pool_destroy(&things)
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY, allocator)
 	set: ecs.Part_Set
-	ecs.part_set_init(&set, type_info_of(Position))
-	defer ecs.part_set_destroy(&set)
+	ecs.part_set_init(&set, type_info_of(Position), allocator = allocator)
+
+	old := ecs.thing_pool_spawn(&things)
+	ecs.thing_pool_kill(&things, old)
+	new := ecs.thing_pool_spawn(&things)
+	ecs.part_set_insert(&set, new)
+
+	testing.expect_assert_message(t, "Cannot insert a part: slot 1 belongs to gen 1, not gen 0.")
+
+	ecs.part_set_insert(&set, old)
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+part_set_insert_asserts_for_part_left_by_stale_thing :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	@(static) backing: [512 * mem.Kilobyte]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+	allocator := mem.arena_allocator(&arena)
+
+	things: ecs.Thing_Pool
+	ecs.thing_pool_init(&things, ecs.THING_POOL_MIN_CAPACITY, allocator)
+	set: ecs.Part_Set
+	ecs.part_set_init(&set, type_info_of(Position), allocator = allocator)
 
 	// Old thing dies without its part being removed.
 	old := ecs.thing_pool_spawn(&things)
 	ecs.part_set_insert(&set, old)
 	ecs.thing_pool_kill(&things, old)
 	new := ecs.thing_pool_spawn(&things)
-	ecs.part_set_insert(&set, new)
 
-	testing.expect_value(t, set.parts_size, 1)
-	testing.expect(t, ecs.part_set_has(&set, new))
-	testing.expect(t, !ecs.part_set_has(&set, old))
+	testing.expect_assert_message(t, "Cannot insert a part: slot 1 belongs to gen 0, not gen 1.")
+
+	ecs.part_set_insert(&set, new)
+	testing.fail_now(t, "The call did not assert.")
 }
 
 // >--------------------------------------------------------------------- Remove
