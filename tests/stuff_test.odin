@@ -6,7 +6,7 @@ import ecs "../ecs"
 
 @(private = "file")
 make_world :: proc(world: ^World) {
-	ecs.world_init(world, ecs.THING_POOL_MIN_CAPACITY)
+	ecs.world_init(world, {capacity = ecs.THING_POOL_MIN_CAPACITY})
 	ecs.register_part(world, .Position, Position)
 	ecs.register_part(world, .Velocity, Velocity)
 	ecs.register_part(world, .Tag, Tag)

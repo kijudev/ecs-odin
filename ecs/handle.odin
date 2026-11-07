@@ -6,10 +6,6 @@ import "core:mem"
 
 Handle_Idx :: u32
 Handle_Gen :: u16
-HANDLE_IDX_BITS :: 20
-HANDLE_GEN_BITS :: 12
-HANDLE_MAX_IDX :: 1 << HANDLE_IDX_BITS
-HANDLE_MAX_GEN :: 1 << HANDLE_GEN_BITS
 
 /* The untyped bits of a handle: `idx` picks the slot, `gen` tells reuses of it apart. */
 Handle_Raw :: bit_field u32 {
@@ -24,9 +20,6 @@ handle is nil. Build one with `handle_make`.
 Handle :: struct($T: typeid) {
 	using raw: Handle_Raw,
 }
-
-HANDLE_POOL_MIN_CAPACITY :: 64
-HANDLE_POOL_MAX_CAPACITY :: 1 << HANDLE_IDX_BITS
 
 /*
 Hands out and validates handles of tag `T`. It stores no data, anything that needs data per
@@ -54,12 +47,12 @@ Makes a handle from its parts. Use it instead of a composite literal: fields pro
 `using` bit_field are silently dropped there, so `Handle(T){idx = 1}` is nil.
 
 Asserts:
-- `idx` is less than HANDLE_MAX_IDX.
-- `gen` is less than HANDLE_MAX_GEN.
+- `idx` is less than HANDLE_IDX_COUNT.
+- `gen` is less than HANDLE_GEN_COUNT.
 */
 handle_make :: proc($T: typeid, idx: Handle_Idx, gen: Handle_Gen = 0) -> Handle(T) {
-	assert(idx < HANDLE_MAX_IDX, "Handle idx has to be less than HANDLE_MAX_IDX.")
-	assert(gen < HANDLE_MAX_GEN, "Handle gen has to be less than HANDLE_MAX_GEN.")
+	assert(idx < HANDLE_IDX_COUNT, "Handle idx has to be less than HANDLE_IDX_COUNT.")
+	assert(gen < HANDLE_GEN_COUNT, "Handle gen has to be less than HANDLE_GEN_COUNT.")
 
 	return Handle(T){raw = {idx = idx, gen = gen}}
 }
@@ -127,7 +120,7 @@ handle_pool_count_alive :: proc(pool: Handle_Pool($T)) -> int {
 
 /*
 Spawns a handle, reusing the most recently killed slot first. Reusing a slot bumps its `gen`, so
-old handles to it stay dead. The gen wraps after HANDLE_MAX_GEN reuses of the same slot.
+old handles to it stay dead. The gen wraps after HANDLE_GEN_COUNT reuses of the same slot.
 
 Returns the nil handle when the pool is full.
 */

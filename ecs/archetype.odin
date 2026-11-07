@@ -25,10 +25,6 @@ Archetype_Pool :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	allocator: mem.Allocator,
 }
 
-ARCHETYPE_POOL_MIN_CAPACITY :: THING_POOL_MIN_CAPACITY
-ARCHETYPE_POOL_MAX_CAPACITY :: THING_POOL_MAX_CAPACITY
-ARCHETYPE_POOL_DEFAULT_CAPACITY :: THING_POOL_DEFAULT_CAPACITY
-
 // >------------------------------------------------------------------ Archetype
 
 /* Makes an archetype of the kinds. */

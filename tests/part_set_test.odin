@@ -177,7 +177,7 @@ part_set_insert_across_pages :: proc(t: ^testing.T) {
 
 	low := ecs.thing_make(1)
 	high := ecs.thing_make(ecs.PART_SET_PAGE_SIZE + 1)
-	last := ecs.thing_make(ecs.THING_MAX_IDX - 1)
+	last := ecs.thing_make(ecs.THING_IDX_COUNT - 1)
 
 	values := [3]Position{{1, 1}, {2, 2}, {3, 3}}
 	ecs.part_set_insert(&set, low, &values[0])

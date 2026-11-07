@@ -289,7 +289,7 @@ thing_pool_gen_wraps_around_after_max_gen_reuses :: proc(t: ^testing.T) {
 	prev := first
 
 	// Recycle the same slot through every generation.
-	for _ in 0 ..< ecs.THING_MAX_GEN {
+	for _ in 0 ..< ecs.THING_GEN_COUNT {
 		ecs.thing_pool_kill(&pool, prev)
 		next := ecs.thing_pool_spawn(&pool)
 
@@ -300,7 +300,7 @@ thing_pool_gen_wraps_around_after_max_gen_reuses :: proc(t: ^testing.T) {
 		prev = next
 	}
 
-	// After THING_MAX_GEN reuses the gen is back where it started, so a
+	// After THING_GEN_COUNT reuses the gen is back where it started, so a
 	// handle that stale is valid again (ABA). Inherent to a 12-bit gen.
 	testing.expect_value(t, prev.gen, first.gen)
 	testing.expect(t, ecs.thing_pool_is_alive(pool, first))

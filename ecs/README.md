@@ -34,7 +34,7 @@ stale handles to it. Fresh slots start at `gen = 0`.
 The free stack also leaves room for recycling heuristics later, e.g. reserving a run of slots so
 a bunch of handles are allocated close to one another.
 
-`gen` is 12 bits, so it wraps after `HANDLE_MAX_GEN` (4096) reuses of the same slot. A handle that
+`gen` is 12 bits, so it wraps after `HANDLE_GEN_COUNT` (4096) reuses of the same slot. A handle that
 is exactly that many generations stale becomes valid again. This is the trade-off for
 packing a handle into a `u32`.
 
@@ -113,13 +113,25 @@ Part values are copied into a single `parts` byte buffer, packed without padding
 keeps the `offset` and `size` of its bytes. `cmd_buffer_get_bytes` returns them as a slice, valid until
 the next record, and `cmd_buffer_get_part` copies them out as a `T`. No `^T` is handed out because a
 packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buffer is capped at
-`CMD_BUFFER_MAX_PARTS_SIZE` bytes.
+`CMD_BUFFER_MAX_PARTS_CAPACITY` bytes.
 
 # World
 
 `World($K, $S)` owns a `Thing_Pool`, a `Part_Pool(K)`, an `Archetype_Pool(K)`, a `Cmd_Buffer(K)`,
-a `Stash_Pool(K)` and a `System_Pool(K, S)`, all allocated with the one `pool_allocator`
-passed to `world_init`. `S` is the enum of system stages.
+a `Stash_Pool(K)` and a `System_Pool(K, S)`. `S` is the enum of system stages. `world_init` takes a
+`World_Params`, where a zero field means its default, so `world_init(&world, {capacity = 1024})` is
+enough.
+
+Sizes come in three kinds:
+
+- **Compile-time constants** are format limits: handle bit widths, the `u32` offsets of the command
+  buffer, the page table of a part set. They aren't meant to be tuned.
+- **Capacities set at init** are what a game tunes: things, stash bytes, systems per stage. They are
+  allocated once with `static_allocator`, never move and are freed in `world_destroy`, so an arena
+  fits.
+- **Growing storage** is what scales with play: part sets and the command buffer. It uses
+  `dynamic_allocator`, which allocates, resizes and frees during play. Pointers into it are only
+  valid until the next change, as each proc documents.
 
 `K` is one enum for parts and stashes alike. A kind becomes a part when it is registered with
 `register` and a stash when it is registered with `register_stash`, and it is never both: registering

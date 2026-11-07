@@ -19,34 +19,65 @@ World :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	part_pool:      Part_Pool(K),
 	stash_pool:     Stash_Pool(K),
 	system_pool:    System_Pool(K, S),
-	pool_allocator: mem.Allocator,
+}
+
+/*
+How to size and allocate a world. A zero field takes its default: the matching
+`*_DEFAULT_CAPACITY` constant, or `context.allocator` for an allocator.
+
+`static_allocator` gets everything sized here: the thing, archetype, stash and system pools. It
+allocates only in `world_init` and frees only in `world_destroy`, so an arena fits.
+`dynamic_allocator` gets everything that grows with use: the part sets and the command buffer. It
+allocates, resizes and frees during play.
+*/
+World_Params :: struct {
+	capacity:           int,
+	stash_capacity:     int,
+	system_capacity:    int,
+	cmd_capacity:       int,
+	cmd_parts_capacity: int,
+	static_allocator:   mem.Allocator,
+	dynamic_allocator:  mem.Allocator,
 }
 
 // >---------------------------------------------------------------- World Setup
 
 /*
-Initializes the world. Every pool is allocated with `pool_allocator`. `capacity` caps the number
-of things, `stash_capacity` the bytes of all stashes together.
+Initializes the world, sized and allocated by `params`. See World_Params.
+
+`capacity` caps the number of things, `stash_capacity` the bytes of all stashes together and
+`system_capacity` the systems of each stage. `cmd_capacity` and `cmd_parts_capacity` are only the
+starting room of the command buffer, it grows past them.
 
 Asserts:
 - `capacity` is between THING_POOL_MIN_CAPACITY and THING_POOL_MAX_CAPACITY.
-- `stash_capacity` is not negative.
+- `stash_capacity` and `system_capacity` are not negative.
+- `cmd_capacity` is not negative.
+- `cmd_parts_capacity` is between 0 and CMD_BUFFER_MAX_PARTS_CAPACITY.
 */
-world_init :: proc(
-	world: ^World($K, $S),
-	capacity := THING_POOL_DEFAULT_CAPACITY,
-	stash_capacity := STASH_POOL_DEFAULT_CAPACITY,
-	pool_allocator := context.allocator,
-) {
-	// One general purpose allocator for every pool of the world.
-	world.pool_allocator = pool_allocator
+world_init :: proc(world: ^World($K, $S), params := World_Params{}) {
+	params := params
 
-	thing_pool_init(&world.thing_pool, capacity, world.pool_allocator)
-	archetype_pool_init(&world.archetype_pool, capacity, world.pool_allocator)
-	cmd_buffer_init(&world.cmd_buffer, allocator = world.pool_allocator)
-	part_pool_init(&world.part_pool, world.pool_allocator)
-	stash_pool_init(&world.stash_pool, stash_capacity, world.pool_allocator)
-	system_pool_init(&world.system_pool, world.pool_allocator)
+	if params.capacity == 0 do params.capacity = THING_POOL_DEFAULT_CAPACITY
+	if params.stash_capacity == 0 do params.stash_capacity = STASH_POOL_DEFAULT_CAPACITY
+	if params.system_capacity == 0 do params.system_capacity = SYSTEM_POOL_DEFAULT_CAPACITY
+	if params.cmd_capacity == 0 do params.cmd_capacity = CMD_BUFFER_DEFAULT_CAPACITY
+	if params.cmd_parts_capacity == 0 do params.cmd_parts_capacity = CMD_BUFFER_DEFAULT_PARTS_CAPACITY
+	if params.static_allocator.procedure == nil do params.static_allocator = context.allocator
+	if params.dynamic_allocator.procedure == nil do params.dynamic_allocator = context.allocator
+
+	thing_pool_init(&world.thing_pool, params.capacity, params.static_allocator)
+	archetype_pool_init(&world.archetype_pool, params.capacity, params.static_allocator)
+	stash_pool_init(&world.stash_pool, params.stash_capacity, params.static_allocator)
+	system_pool_init(&world.system_pool, params.system_capacity, params.static_allocator)
+
+	part_pool_init(&world.part_pool, params.dynamic_allocator)
+	cmd_buffer_init(
+		&world.cmd_buffer,
+		params.cmd_capacity,
+		params.cmd_parts_capacity,
+		params.dynamic_allocator,
+	)
 }
 
 /*
@@ -314,7 +345,7 @@ touches what it declared.
 
 Asserts:
 - `system` is not nil.
-- the stage has fewer than SYSTEM_POOL_MAX_STAGE_CAPACITY systems.
+- the stage has fewer systems than `system_capacity`.
 */
 world_schedule :: proc(
 	world: ^World($K, $S),
@@ -339,8 +370,8 @@ last run.
 world_run_stage_sync :: proc(world: ^World($K, $S), stage: S) {
 	pool := &world.system_pool
 
-	graph := pool.graphs[stage]
-	systems := pool.systems[stage][:]
+	graph := &pool.graphs[stage]
+	systems := system_pool_get_systems(pool, stage)
 	if graph.system_count != len(systems) do system_graph_build(graph, systems)
 
 	system_pool_run_stage_sync(pool, stage, stuff_make(world))

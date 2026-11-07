@@ -15,15 +15,6 @@ Thing_Pool :: Handle_Pool(Thing_Tag)
 
 Thing_Idx :: Handle_Idx
 Thing_Gen :: Handle_Gen
-THING_IDX_BITS :: HANDLE_IDX_BITS
-THING_GEN_BITS :: HANDLE_GEN_BITS
-THING_MAX_IDX :: HANDLE_MAX_IDX
-THING_MAX_GEN :: HANDLE_MAX_GEN
-THING_NIL :: Thing{}
-
-THING_POOL_MIN_CAPACITY :: HANDLE_POOL_MIN_CAPACITY
-THING_POOL_MAX_CAPACITY :: HANDLE_POOL_MAX_CAPACITY
-THING_POOL_DEFAULT_CAPACITY :: 1 << 16
 
 // >---------------------------------------------------------------------- Thing
 

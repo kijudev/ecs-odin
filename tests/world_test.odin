@@ -7,7 +7,7 @@ import ecs "../ecs"
 
 @(private = "file")
 make_world :: proc(world: ^World) {
-	ecs.world_init(world, ecs.THING_POOL_MIN_CAPACITY)
+	ecs.world_init(world, {capacity = ecs.THING_POOL_MIN_CAPACITY})
 	ecs.world_register_part(world, .Position, Position)
 	ecs.world_register_part(world, .Velocity, Velocity, count_destroyed)
 	ecs.world_register_part(world, .Tag, Tag)
@@ -28,23 +28,35 @@ init_creates_empty_world :: proc(t: ^testing.T) {
 }
 
 @(test)
-every_pool_allocates_with_pool_allocator :: proc(t: ^testing.T) {
-	track: mem.Tracking_Allocator
-	mem.tracking_allocator_init(&track, context.allocator)
-	defer mem.tracking_allocator_destroy(&track)
+static_allocator_is_only_used_in_init_and_destroy :: proc(t: ^testing.T) {
+	static_track: mem.Tracking_Allocator
+	mem.tracking_allocator_init(&static_track, context.allocator)
+	defer mem.tracking_allocator_destroy(&static_track)
 
-	// Anything that bypasses the pool allocator panics.
+	dynamic_track: mem.Tracking_Allocator
+	mem.tracking_allocator_init(&dynamic_track, context.allocator)
+	defer mem.tracking_allocator_destroy(&dynamic_track)
+
+	// Anything that bypasses both allocators panics.
 	context.allocator = mem.panic_allocator()
 
 	world: World
 	ecs.world_init(
 		&world,
-		ecs.THING_POOL_MIN_CAPACITY,
-		pool_allocator = mem.tracking_allocator(&track),
+		{
+			capacity = ecs.THING_POOL_MIN_CAPACITY,
+			static_allocator = mem.tracking_allocator(&static_track),
+			dynamic_allocator = mem.tracking_allocator(&dynamic_track),
+		},
 	)
 	ecs.world_register_part(&world, .Position, Position)
 	ecs.world_register_part(&world, .Velocity, Velocity)
 	ecs.world_register_stash(&world, .Time, Time)
+	ecs.world_schedule(&world, system_a, .Update, {}, {.Position})
+
+	static_allocated := static_track.total_memory_allocated
+	static_frees := static_track.total_free_count
+	dynamic_allocations := dynamic_track.total_allocation_count
 
 	// Grow the part sets, their pages and the command buffer past their first allocation.
 	for _ in 0 ..< 32 {
@@ -52,12 +64,37 @@ every_pool_allocates_with_pool_allocator :: proc(t: ^testing.T) {
 		ecs.set_now(&world, thing, .Position, Position{1, 2})
 		ecs.set_later(&world, thing, .Velocity, Velocity{3, 4})
 	}
-	ecs.world_apply(&world)
+	clear(&system_log)
+	ecs.world_run_sync(&world)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Velocity), 32)
 
+	testing.expect_value(t, static_track.total_memory_allocated, static_allocated)
+	testing.expect_value(t, static_track.total_free_count, static_frees)
+	testing.expect(t, dynamic_track.total_allocation_count > dynamic_allocations)
+
 	ecs.world_destroy(&world)
-	testing.expect_value(t, len(track.allocation_map), 0)
-	testing.expect_value(t, len(track.bad_free_array), 0)
+	testing.expect_value(t, len(static_track.allocation_map), 0)
+	testing.expect_value(t, len(static_track.bad_free_array), 0)
+	testing.expect_value(t, len(dynamic_track.allocation_map), 0)
+	testing.expect_value(t, len(dynamic_track.bad_free_array), 0)
+}
+
+@(test)
+init_fills_zero_params_with_defaults :: proc(t: ^testing.T) {
+	world: World
+	ecs.world_init(&world, {system_capacity = 8})
+	defer ecs.world_destroy(&world)
+
+	testing.expect_value(t, len(world.thing_pool.slots), ecs.THING_POOL_DEFAULT_CAPACITY)
+	testing.expect_value(t, len(world.archetype_pool.slots), ecs.THING_POOL_DEFAULT_CAPACITY)
+	testing.expect_value(t, world.stash_pool.stashes_capacity, ecs.STASH_POOL_DEFAULT_CAPACITY)
+	testing.expect_value(t, cap(world.cmd_buffer.cmds), ecs.CMD_BUFFER_DEFAULT_CAPACITY)
+	testing.expect_value(t, cap(world.cmd_buffer.parts), ecs.CMD_BUFFER_DEFAULT_PARTS_CAPACITY)
+	testing.expect(t, world.thing_pool.allocator == context.allocator)
+	testing.expect(t, world.part_pool.allocator == context.allocator)
+
+	// A field that is set is kept.
+	testing.expect_value(t, world.system_pool.capacity, 8)
 }
 
 @(test)
@@ -783,7 +820,15 @@ set_later_wrong_type_asserts_when_recording :: proc(t: ^testing.T) {
 	mem.arena_init(&arena, backing[:])
 
 	world: World
-	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+	ecs.world_init(
+		&world,
+		{
+			capacity = ecs.THING_POOL_MIN_CAPACITY,
+			stash_capacity = 64,
+			static_allocator = mem.arena_allocator(&arena),
+			dynamic_allocator = mem.arena_allocator(&arena),
+		},
+	)
 	ecs.world_register_part(&world, .Target, Position)
 	thing := ecs.world_spawn(&world)
 
@@ -803,7 +848,15 @@ get_stash_wrong_type_asserts :: proc(t: ^testing.T) {
 	mem.arena_init(&arena, backing[:])
 
 	world: World
-	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+	ecs.world_init(
+		&world,
+		{
+			capacity = ecs.THING_POOL_MIN_CAPACITY,
+			stash_capacity = 64,
+			static_allocator = mem.arena_allocator(&arena),
+			dynamic_allocator = mem.arena_allocator(&arena),
+		},
+	)
 	ecs.world_register_stash(&world, .Gravity, f32)
 
 	testing.expect_assert_message(t, "Stash kind Gravity is a f32, not a f64.")
@@ -822,7 +875,15 @@ get_stash_unregistered_asserts :: proc(t: ^testing.T) {
 	mem.arena_init(&arena, backing[:])
 
 	world: World
-	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+	ecs.world_init(
+		&world,
+		{
+			capacity = ecs.THING_POOL_MIN_CAPACITY,
+			stash_capacity = 64,
+			static_allocator = mem.arena_allocator(&arena),
+			dynamic_allocator = mem.arena_allocator(&arena),
+		},
+	)
 
 	testing.expect_assert_message(t, "Stash kind Time is not registered.")
 	ecs.world_get_stash(&world, .Time, Time)
@@ -840,7 +901,15 @@ register_stash_kind_as_part_asserts :: proc(t: ^testing.T) {
 	mem.arena_init(&arena, backing[:])
 
 	world: World
-	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+	ecs.world_init(
+		&world,
+		{
+			capacity = ecs.THING_POOL_MIN_CAPACITY,
+			stash_capacity = 64,
+			static_allocator = mem.arena_allocator(&arena),
+			dynamic_allocator = mem.arena_allocator(&arena),
+		},
+	)
 	ecs.world_register_stash(&world, .Time, Time)
 
 	testing.expect_assert_message(t, "Kind Time is already registered as a stash.")
@@ -859,7 +928,15 @@ register_part_kind_as_stash_asserts :: proc(t: ^testing.T) {
 	mem.arena_init(&arena, backing[:])
 
 	world: World
-	ecs.world_init(&world, ecs.THING_POOL_MIN_CAPACITY, 64, mem.arena_allocator(&arena))
+	ecs.world_init(
+		&world,
+		{
+			capacity = ecs.THING_POOL_MIN_CAPACITY,
+			stash_capacity = 64,
+			static_allocator = mem.arena_allocator(&arena),
+			dynamic_allocator = mem.arena_allocator(&arena),
+		},
+	)
 	ecs.world_register_part(&world, .Position, Position)
 
 	testing.expect_assert_message(t, "Kind Position is already registered as a part.")

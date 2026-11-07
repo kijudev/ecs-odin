@@ -11,7 +11,15 @@ Query :: ecs.Query(Kind, Stage)
 // Health is left unregistered on purpose.
 @(private = "file")
 make_world :: proc(world: ^World, allocator := context.allocator) {
-	ecs.world_init(world, ecs.THING_POOL_MIN_CAPACITY, 64, allocator)
+	ecs.world_init(
+		world,
+		{
+			capacity = ecs.THING_POOL_MIN_CAPACITY,
+			stash_capacity = 64,
+			static_allocator = allocator,
+			dynamic_allocator = allocator,
+		},
+	)
 	ecs.register_part(world, .Position, Position)
 	ecs.register_part(world, .Velocity, Velocity)
 	ecs.register_part(world, .Tag, Tag)

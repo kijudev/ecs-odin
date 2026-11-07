@@ -7,14 +7,6 @@ import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
 
-PART_SET_PAGE_COUNT :: 1 << 6
-PART_SET_PAGE_BITS :: THING_IDX_BITS - 6
-PART_SET_PAGE_SIZE :: 1 << PART_SET_PAGE_BITS
-PART_SET_MAX_CAPACITY :: THING_MAX_IDX
-PART_MAX_COUNT :: 128
-
-#assert(PART_SET_PAGE_COUNT * PART_SET_PAGE_SIZE == THING_MAX_IDX)
-
 Part_Idx :: u32
 Part_Set_Indices :: Inline_Paged_Array(Part_Idx, PART_SET_PAGE_COUNT, PART_SET_PAGE_SIZE)
 

@@ -8,15 +8,6 @@ import "core:mem"
 Cmd_Offset :: u32
 Cmd_Size :: u32
 
-/* The most bytes of parts a buffer holds between resets. */
-CMD_BUFFER_MAX_PARTS_SIZE :: int(max(Cmd_Offset))
-
-/* The largest part `cmd_buffer_record_set_value` accepts, in bytes. */
-CMD_PART_MAX_SIZE :: int(max(Cmd_Size))
-
-CMD_BUFFER_DEFAULT_CAPACITY :: 1 << 8
-CMD_BUFFER_DEFAULT_PARTS_CAPACITY :: 1 << 12
-
 /* Kills `thing`. */
 Cmd_Kill :: struct {
 	thing: Thing,
@@ -68,7 +59,7 @@ allocated up front with `allocator`. Both grow as needed.
 
 Asserts:
 - `capacity` is not negative.
-- `parts_capacity` is between 0 and CMD_BUFFER_MAX_PARTS_SIZE.
+- `parts_capacity` is between 0 and CMD_BUFFER_MAX_PARTS_CAPACITY.
 */
 cmd_buffer_init :: proc(
 	buffer: ^Cmd_Buffer($K),
@@ -79,8 +70,8 @@ cmd_buffer_init :: proc(
 	assert(capacity >= 0, "Command buffer capacity cannot be negative.")
 	assert(parts_capacity >= 0, "Command buffer parts capacity cannot be negative.")
 	assert(
-		parts_capacity <= CMD_BUFFER_MAX_PARTS_SIZE,
-		"Command buffer parts capacity has to be less or equal to CMD_BUFFER_MAX_PARTS_SIZE.",
+		parts_capacity <= CMD_BUFFER_MAX_PARTS_CAPACITY,
+		"Command buffer parts capacity has to be less or equal to CMD_BUFFER_MAX_PARTS_CAPACITY.",
 	)
 
 	cmds, cmds_err := make([dynamic]Cmd(K), 0, capacity, allocator)
@@ -125,11 +116,11 @@ Records setting the thing's part of `kind` to a copy of the `size` bytes at `par
 
 Asserts:
 - `thing` is not THING_NIL.
-- `size` is between 0 and CMD_PART_MAX_SIZE.
+- `size` is between 0 and CMD_BUFFER_MAX_PART_SIZE.
 - `part` is not nil, unless `size` is 0.
 
 Panics:
-- the parts would grow past CMD_BUFFER_MAX_PARTS_SIZE.
+- the parts would grow past CMD_BUFFER_MAX_PARTS_CAPACITY.
 */
 cmd_buffer_record_set_value :: proc(
 	buffer: ^Cmd_Buffer($K),
@@ -140,10 +131,13 @@ cmd_buffer_record_set_value :: proc(
 ) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
 	assert(size >= 0, "Part size cannot be negative.")
-	assert(size <= CMD_PART_MAX_SIZE, "Part size has to be less or equal to CMD_PART_MAX_SIZE.")
+	assert(
+		size <= CMD_BUFFER_MAX_PART_SIZE,
+		"Part size has to be less or equal to CMD_BUFFER_MAX_PART_SIZE.",
+	)
 	assert(part != nil || size == 0, "Cannot record a nil part, use cmd_buffer_record_set_zero.")
-	if len(buffer.parts) + size > CMD_BUFFER_MAX_PARTS_SIZE {
-		panic("Command buffer parts size would exceed CMD_BUFFER_MAX_PARTS_SIZE.")
+	if len(buffer.parts) + size > CMD_BUFFER_MAX_PARTS_CAPACITY {
+		panic("Command buffer parts size would exceed CMD_BUFFER_MAX_PARTS_CAPACITY.")
 	}
 
 	offset := len(buffer.parts)

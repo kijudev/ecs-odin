@@ -6,8 +6,6 @@ import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
 
-STASH_POOL_DEFAULT_CAPACITY :: 1 << 16
-
 /*
 Keeps one value per stash kind, packed into a single buffer allocated up front. The buffer never
 moves, so pointers to stashes stay valid until `destroy`.
@@ -17,7 +15,7 @@ Stash_Pool :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	stashes_size:     int,
 	stashes_capacity: int,
 	offsets:          [K]int,
-	destroy_procs:      [K]proc(stash: rawptr),
+	destroy_procs:    [K]proc(stash: rawptr),
 	registered:       bit_set[K],
 	types:            [K]typeid,
 	allocator:        mem.Allocator,
@@ -83,11 +81,7 @@ stash_pool_register :: proc(
 	$T: typeid,
 	destroy: proc(stash: rawptr) = nil,
 ) {
-	fmt.assertf(
-		kind not_in pool.registered,
-		"Stash kind %v is already registered.",
-		kind,
-	)
+	fmt.assertf(kind not_in pool.registered, "Stash kind %v is already registered.", kind)
 
 	// The buffer never moves, so aligning the address keeps the stash aligned for good.
 	base := uintptr(raw_data(pool.stashes_data))
@@ -118,17 +112,8 @@ stash_pool_is_registered :: proc(pool: ^Stash_Pool($K), kind: K) -> bool {
 
 /* Asserts that `kind` is registered, reporting `loc`. Disabled with ODIN_DISABLE_ASSERT. */
 @(disabled = ODIN_DISABLE_ASSERT)
-stash_pool_assert_registered :: proc(
-	pool: ^Stash_Pool($K),
-	kind: K,
-	loc := #caller_location,
-) {
-	fmt.assertf(
-		kind in pool.registered,
-		"Stash kind %v is not registered.",
-		kind,
-		loc = loc,
-	)
+stash_pool_assert_registered :: proc(pool: ^Stash_Pool($K), kind: K, loc := #caller_location) {
+	fmt.assertf(kind in pool.registered, "Stash kind %v is not registered.", kind, loc = loc)
 }
 
 /*
