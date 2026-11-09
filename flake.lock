@@ -1,12 +1,29 @@
 {
   "nodes": {
+    "flecs": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793770247,
+        "narHash": "sha256-yDn6+JH9NlzmdF8N6m8xNeEkAuqpqw3E7c4UuWOEhVM=",
+        "owner": "SanderMertens",
+        "repo": "flecs",
+        "rev": "6566d4b7bdc597d0b74d5e0a4104d4ae6ac49402",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SanderMertens",
+        "ref": "v4.2.0",
+        "repo": "flecs",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1793341285,
-        "narHash": "sha256-Y1CiZ4SoBUjLQyQM/pY+rS2dXD3CHLPstF0lmOc73D4=",
+        "lastModified": 1794042290,
+        "narHash": "sha256-ziZn2PvCJE5JEEpqTdxXwJpPB+L3YqoCpTAMCzyaP3U=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "1c89083e451e891152365b799595cf7790a43325",
+        "rev": "f4a03c008967841f2a0b3cb7c436fc6fc31671f6",
         "type": "github"
       },
       "original": {
@@ -18,6 +35,7 @@
     },
     "root": {
       "inputs": {
+        "flecs": "flecs",
         "nixpkgs": "nixpkgs"
       }
     }
