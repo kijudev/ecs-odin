@@ -88,7 +88,10 @@ inline_paged_array_get_ptr :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: in
 }
 
 /* See paged_array_get_unchecked. */
-inline_paged_array_get_unchecked :: proc(arr: ^Inline_Paged_Array($T, $C, $S), idx: int) -> T {
+inline_paged_array_get_unchecked :: #force_inline proc(
+	arr: ^Inline_Paged_Array($T, $C, $S),
+	idx: int,
+) -> T #no_bounds_check {
 	page, offset := locate(idx, intrinsics.constant_log2(S), C * S)
 	return arr.pages[page][offset]
 }
@@ -226,7 +229,7 @@ Gets the element at `idx`. Its page has to be allocated.
 Asserts:
 - `idx` is in range of the capacity.
 */
-paged_array_get_unchecked :: proc(arr: ^Paged_Array($T), idx: int) -> T {
+paged_array_get_unchecked :: proc(arr: ^Paged_Array($T), idx: int) -> T #no_bounds_check {
 	page, offset := locate(idx, arr.page_shift, paged_array_capacity(arr))
 	return arr.pages[page][offset]
 }

@@ -178,10 +178,10 @@ access_everything_system :: proc(stuff: Stuff) {
 	_ = ecs.get_hierarchy_ends(stuff, .Transform)
 	_ = ecs.get_subtree(stuff, .Transform, a)
 
-	query := ecs.query_make_hierarchy(stuff, .Transform, {.Position}, {.Velocity})
-	for _ in ecs.query_iter(&query) {
+	query := ecs.hierarchy_query_make(stuff, .Transform, {.Position}, {.Velocity})
+	for _ in ecs.hierarchy_query_iter(&query) {
 		_ = ecs.get_part(&query, .Position, Position)
-		_, _ = ecs.query_get_parent_part(&query, .Position, Position)
+		_, _ = ecs.hierarchy_query_get_parent_part(&query, .Position, Position)
 		ecs.write_part(&query, .Position, Position).x += 1
 	}
 
@@ -231,8 +231,8 @@ access_reads_system :: proc(stuff: Stuff) {
 	_ = ecs.get_stash(stuff, .Time, Time)
 	_ = ecs.get_parent(stuff, .Transform, b)
 
-	query := ecs.query_make_hierarchy(stuff, .Transform, {.Position}, {})
-	for _ in ecs.query_iter(&query) do _ = ecs.get_part(&query, .Position, Position)
+	query := ecs.hierarchy_query_make(stuff, .Transform, {.Position}, {})
+	for _ in ecs.hierarchy_query_iter(&query) do _ = ecs.get_part(&query, .Position, Position)
 
 	append(&system_log, 42)
 }
@@ -636,7 +636,7 @@ access_query_exclude_undeclared_asserts :: proc(t: ^testing.T) {
 
 @(private = "file")
 access_query_hierarchy_undeclared_system :: proc(stuff: Stuff) {
-	_ = ecs.query_make_hierarchy(stuff, .Transform, {.Position}, {})
+	_ = ecs.hierarchy_query_make(stuff, .Transform, {.Position}, {})
 }
 
 @(test)

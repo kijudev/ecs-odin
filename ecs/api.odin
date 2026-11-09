@@ -135,16 +135,17 @@ count_free :: proc {
 /*
 Gets the query's current thing.
 
-Returns THING_NIL before the first `query_iter` and once it returns false.
+Returns THING_NIL before the first `query_iter` / `hierarchy_query_iter` and once it returns false.
 */
 get_thing :: proc {
 	query_get_thing,
+	hierarchy_query_get_thing,
 }
 
 // >---------------------------------------------------------------------- Parts
 
 /*
-Checks whether the thing has the part. The query variant checks the current thing.
+Checks whether the thing has the part. The query variants check the current thing.
 
 Returns false for a dead thing.
 
@@ -156,42 +157,45 @@ has :: proc {
 	world_has,
 	stuff_has,
 	query_has,
+	hierarchy_query_has,
 }
 
 /*
-Gets a copy of the thing's part, for reading. The query variant gets it from the current thing.
+Gets a copy of the thing's part, for reading. The query variants get it from the current thing.
 
-Returns the part and true, or false if the thing doesn't have it. The query variant returns just
+Returns the part and true, or false if the thing doesn't have it. The query variants return just
 the part, the current thing always has it.
 
 Asserts:
 - `kind` is a registered part.
 - `T` is the type `kind` was registered with.
 - the system declared `kind` in its reads or writes (stuff and query variants).
-- the query has a current thing that has the part (query variant only).
+- the query has a current thing that has the part (query variants only).
 */
 get_part :: proc {
 	world_get_part,
 	stuff_get_part,
 	query_get_part,
+	hierarchy_query_get_part,
 }
 
 /*
-Gets the thing's part, for writing. The query variant gets it from the current thing.
+Gets the thing's part, for writing. The query variants get it from the current thing.
 
-Returns nil if the thing doesn't have the part; the query variant never does (unchecked).
+Returns nil if the thing doesn't have the part; the query variants never do (unchecked).
 The pointer is valid until a part of this kind is added to or removed from any thing.
 
 Asserts:
 - `kind` is a registered part.
 - `T` is the type `kind` was registered with.
 - the system declared `kind` in its writes (stuff and query variants).
-- the query has a current thing that has the part (query variant only).
+- the query has a current thing that has the part (query variants only).
 */
 write_part :: proc {
 	world_write_part,
 	stuff_write_part,
 	query_write_part,
+	hierarchy_query_write_part,
 }
 
 /*
@@ -407,20 +411,20 @@ detach_later :: proc {
 }
 
 /*
-Gets the thing's parent. The query variant gets the parent of the current thing in the query's
-hierarchy, read from the links rather than the order.
+Gets the thing's parent. The hierarchy query variant gets the parent of the current thing in the
+query's hierarchy, read from the links rather than the order.
 
 Returns THING_NIL if the thing is dead, a root or not in the hierarchy.
 
 Asserts:
 - `kind` is a registered hierarchy.
-- the query is a hierarchy query and has a current thing (query variant only).
+- the query has a current thing (hierarchy query variant only).
 - the system declared `kind` in its reads or writes (stuff variant).
 */
 get_parent :: proc {
 	world_get_parent,
 	stuff_get_parent,
-	query_get_parent,
+	hierarchy_query_get_parent,
 }
 
 /*

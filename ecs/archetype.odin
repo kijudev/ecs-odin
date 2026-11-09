@@ -183,8 +183,20 @@ Gets the thing's archetype.
 Asserts:
 - `thing.idx` is less than the pool capacity.
 */
-archetype_pool_get :: proc(pool: ^Archetype_Pool($K), thing: Thing) -> Archetype(K) {
+archetype_pool_get :: #force_inline proc(pool: ^Archetype_Pool($K), thing: Thing) -> Archetype(K) {
 	check_thing(thing, len(pool.slots))
+	return pool.slots[thing.idx]
+}
+
+/*
+Gets the thing's archetype without checking its idx. The idx has to be less than the pool
+capacity.
+*/
+@(private)
+archetype_pool_get_unchecked :: #force_inline proc(
+	pool: ^Archetype_Pool($K),
+	thing: Thing,
+) -> Archetype(K) #no_bounds_check {
 	return pool.slots[thing.idx]
 }
 

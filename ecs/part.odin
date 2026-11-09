@@ -123,7 +123,7 @@ is garbage.
 
 The pointer is valid until a part is inserted into or removed from the set.
 */
-part_set_get_unchecked :: proc(set: ^Part_Set, thing: Thing) -> rawptr {
+part_set_get_unchecked :: #force_inline proc(set: ^Part_Set, thing: Thing) -> rawptr {
 	return parts_get_unchecked(set, dense_idx_unchecked(set, thing))
 }
 
@@ -234,6 +234,17 @@ The slice is valid until a part is inserted into or removed from the set.
 */
 part_set_get_things :: proc(set: ^Part_Set) -> []Thing {
 	return set.things[:set.parts_size]
+}
+
+/*
+Gets the part at dense index `idx` without checking it, the same index as in
+`part_set_get_things`. Used by queries, which already know where they are in the set.
+
+The pointer is valid until a part is inserted into or removed from the set.
+*/
+@(private)
+part_set_get_at_unchecked :: #force_inline proc(set: ^Part_Set, idx: int) -> rawptr {
+	return parts_get_unchecked(set, idx)
 }
 
 // >------------------------------------------------------------------ Part_Pool
@@ -359,7 +370,12 @@ Asserts:
 - `kind` is registered.
 - `T` is the type `kind` was registered with.
 */
-part_pool_get_unchecked :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, $T: typeid) -> ^T {
+part_pool_get_unchecked :: proc(
+	pool: ^Part_Pool($K),
+	thing: Thing,
+	kind: K,
+	$T: typeid,
+) -> ^T #no_bounds_check {
 	part_pool_assert_type(pool, kind, T)
 	return cast(^T)part_set_get_unchecked(&pool.sets[kind], thing)
 }
@@ -554,7 +570,7 @@ dense_idx :: proc(set: ^Part_Set, thing: Thing) -> (int, bool) {
 }
 
 @(private = "file")
-dense_idx_unchecked :: proc(set: ^Part_Set, thing: Thing) -> int {
+dense_idx_unchecked :: #force_inline proc(set: ^Part_Set, thing: Thing) -> int {
 	return int(inline_paged_array_get_unchecked(&set.indices, int(thing.idx)) - 1)
 }
 
@@ -620,7 +636,7 @@ parts_write :: proc(set: ^Part_Set, dst: rawptr, src: rawptr) {
 }
 
 @(private = "file")
-parts_get_unchecked :: proc(set: ^Part_Set, idx: int) -> rawptr {
+parts_get_unchecked :: #force_inline proc(set: ^Part_Set, idx: int) -> rawptr {
 	if intrinsics.unlikely(set.part_size == 0) do return &Part_Zero_Sized
 
 	offset := uintptr(idx * set.part_size)

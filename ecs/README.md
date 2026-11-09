@@ -226,7 +226,7 @@ The declaration is an `Access`: a name plus the `reads` and `writes` sets. `Syst
 it, and the `Stuff` a system gets carries a copy, so `Stuff` knows nothing about systems.
 `stuff_make_restricted(world, access)` makes such a stuff by hand. Every proc that touches the
 world right away asserts against it: reads (`has`, `get_part`, `get_parts`, `get_stash`, the
-hierarchy reads, `query_make`) need the kind in `reads` or `writes`, and the `_now` procs and the
+hierarchy reads, `query_make`, `hierarchy_query_make`) need the kind in `reads` or `writes`, and the `_now` procs and the
 `write_*` getters need it in `writes`. So `writes` implies `reads`. The messages name the system:
 "System move writes Position without declaring it in writes."
 
@@ -239,8 +239,8 @@ runtime: every part kind of the thing and every hierarchy it is in has to be in 
 every thing in the subtree in the tree case.
 
 Reads and writes are separate procs, since Odin has no `const`. `get_part`, `get_stash` and
-`query_get_parent_part` return copies, and `get_part` returns `(T, bool)`. `write_part`,
-`write_parts`, `write_stash` and `query_write_part` return pointers. `get_parts` returns the same
+`hierarchy_query_get_parent_part` return copies, and `get_part` returns `(T, bool)`. `write_part`,
+`write_parts`, `write_stash` and the query `write_part` variants return pointers. `get_parts` returns the same
 slice as `write_parts`, so writing through it is only caught by review.
 
 An unrestricted `Stuff`, like the zero value or what `stuff_make` gives, has full access, and the
@@ -256,24 +256,32 @@ honest mistakes in the declarations, which the scheduler relies on.
 hierarchies and stashes: it cannot register kinds, apply commands, rebuild hierarchies or
 init/destroy/reset the world.
 
-`Query($K, $S)` iterates the things that have every kind of `include` and none of `exclude`.
-`include` cannot be empty and cannot share a kind with `exclude`. It walks the smallest part set of
-`include`, picked in `query_make` and again in `query_refresh`, which also starts the iteration over.
-Iterate it with `for thing in query_iter(&query)`. `query.thing` is the current thing (nil once
-`query_iter` returns false), and `query_has` and `query_get_part` read it.
+There are two query types over a shared `Query_Base` (the stuff, `include`, `exclude`, the current
+thing). Both iterate the things that have every kind of `include` and none of `exclude`, with
+`for thing in query_iter(&query)` or `hierarchy_query_iter`. `include` cannot be empty and cannot
+share a kind with `exclude`. `query.thing` is the current thing (nil once iteration ends), and
+`has`, `get_part`, `write_part` and `get_thing` take either type.
 
-`query_make_hierarchy(stuff, kind, include, exclude)` makes a query that walks the order of a
-hierarchy instead, so a parent always comes before its children, which is what propagating values
-down a tree needs. It filters by archetype the same way. A thing in the hierarchy without the parts
-is skipped while its children are still visited, and a thing outside the hierarchy is never
-visited. The order is the one of the last rebuild: things killed since then are skipped (the
-order keeps full handles, so a reused slot is skipped too), and things attached since then show
-up after the next rebuild. For the current thing, `query_get_parent` and `query_get_parent_part`
-read the links, `query_get_depth` reads the order, and `query_skip_subtree` jumps past its
-descendants in O(1) using `ends`.
+`Query($K, $S)`, from `query_make`, walks the smallest part set of `include`, picked in
+`query_make` and again in `query_refresh`, which also starts the iteration over. The part of that
+set is read straight at its dense index, and when `include` is that one kind and `exclude` is
+empty, no archetype is checked at all.
+
+`Hierarchy_Query($K, $S)`, from `hierarchy_query_make(stuff, kind, include, exclude)`, walks the
+order of a hierarchy instead, so a parent always comes before its children, which is what
+propagating values down a tree needs. A thing in the hierarchy without the parts is skipped while
+its children are still visited, and a thing outside the hierarchy is never visited. The order is
+the one of the last rebuild: things killed since then are skipped (the order keeps full handles, so
+a reused slot is skipped too), and things attached since then show up after the next rebuild. Only
+this type has `get_parent` and `hierarchy_query_get_parent_part` (read from the links),
+`hierarchy_query_get_depth` (from the order) and `hierarchy_query_skip_subtree`, which jumps past
+the current thing's descendants in O(1) using `ends`. Calling them on a plain query doesn't compile.
+
+The hot procs are `#force_inline` with bounds checks off only where the index is already known to
+be valid. Inlining matters: without it, every iteration pays for real calls.
 
 # API
 
 `api.odin` has the short names (`spawn`, `get_part`, `set_later`, ...). Each one is a proc group
-of the `world_`, `stuff_` and `query_` procs, so the handle you pass decides what you may do: a
+of the `world_`, `stuff_`, `query_` and `hierarchy_query_` procs, so the handle you pass decides what you may do: a
 call a handle has no proc for does not compile. Names with only a world proc are plain aliases.

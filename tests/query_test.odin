@@ -112,6 +112,32 @@ query_starts_from_the_smallest_set :: proc(t: ^testing.T) {
 }
 
 @(test)
+query_reads_the_right_part_when_sets_differ_in_order :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	// Velocity goes in reversed, so its dense order is the opposite of Position's.
+	things: [8]ecs.Thing
+	for &thing, i in things {
+		thing = ecs.spawn(&world)
+		ecs.set_now(&world, thing, .Position, Position{f32(i), 0})
+	}
+	#reverse for thing, i in things do ecs.set_now(&world, thing, .Velocity, Velocity{f32(i) + 100, 0})
+
+	visited := 0
+	query := ecs.query_make(ecs.stuff_make(&world), {.Position, .Velocity}, {})
+	for _ in ecs.query_iter(&query) {
+		pos := ecs.get_part(&query, .Position, Position)
+		vel := ecs.get_part(&query, .Velocity, Velocity)
+		testing.expect_value(t, vel.x, pos.x + 100)
+		testing.expect_value(t, ecs.write_part(&query, .Velocity, Velocity).x, pos.x + 100)
+		visited += 1
+	}
+	testing.expect_value(t, visited, len(things))
+}
+
+@(test)
 query_iter_clears_thing_when_done :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
@@ -172,6 +198,24 @@ query_refresh_starts_over :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(things), 2)
 	testing.expect(t, contains(things[:], a))
 	testing.expect(t, contains(things[:], b))
+}
+
+@(test)
+query_single_include_still_excludes :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	kept := ecs.spawn(&world)
+	ecs.set_now(&world, kept, .Position, Position{})
+	tagged := ecs.spawn(&world)
+	ecs.set_now(&world, tagged, .Position, Position{})
+	ecs.add_now(&world, tagged, .Tag)
+
+	query := ecs.query_make(ecs.stuff_make(&world), {.Position}, {.Tag})
+	things := collect(&query)
+	testing.expect_value(t, len(things), 1)
+	testing.expect(t, contains(things[:], kept))
 }
 
 // >-------------------------------------------------------------- Current Thing
@@ -236,11 +280,12 @@ build_tree :: proc(world: ^World) -> (a, b, c, d, e, f, g: ecs.Thing) {
 @(private = "file")
 expect_collected :: proc(
 	t: ^testing.T,
-	query: ^Query,
+	query: ^ecs.Hierarchy_Query(Kind, Stage),
 	want: []ecs.Thing,
 	loc := #caller_location,
 ) {
-	got := collect(query)
+	got: [dynamic; 16]ecs.Thing
+	for thing in ecs.hierarchy_query_iter(query) do append(&got, thing)
 	if !testing.expect_value(t, len(got), len(want), loc) do return
 	for thing, i in got do testing.expect_value(t, thing, want[i], loc)
 }
@@ -255,13 +300,13 @@ hierarchy_query_walks_pre_order_and_filters :: proc(t: ^testing.T) {
 	ecs.add_now(&world, d, .Tag)
 
 	// b has no Position and d is excluded, the children of b are still visited.
-	query := ecs.query_make_hierarchy(ecs.stuff_make(&world), .Transform, {.Position}, {.Tag})
+	query := ecs.hierarchy_query_make(ecs.stuff_make(&world), .Transform, {.Position}, {.Tag})
 	expect_collected(t, &query, {a, c, g, e, f})
 
 	// A thing with the parts but outside the hierarchy is never visited.
 	outside := ecs.spawn(&world)
 	ecs.set_now(&world, outside, .Position, Position{})
-	ecs.query_refresh(&query)
+	ecs.hierarchy_query_refresh(&query)
 	expect_collected(t, &query, {a, c, g, e, f})
 }
 
@@ -284,11 +329,11 @@ hierarchy_query_sees_the_last_rebuild :: proc(t: ^testing.T) {
 	ecs.set_now(&world, late, .Position, Position{})
 	ecs.attach_now(&world, .Transform, late, g)
 
-	query := ecs.query_make_hierarchy(ecs.stuff_make(&world), .Transform, {.Position}, {})
+	query := ecs.hierarchy_query_make(ecs.stuff_make(&world), .Transform, {.Position}, {})
 	expect_collected(t, &query, {a, d, g, e, f})
 
 	ecs.world_rebuild_hierarchy(&world, .Transform)
-	ecs.query_refresh(&query)
+	ecs.hierarchy_query_refresh(&query)
 	expect_collected(t, &query, {a, d, g, late, e, f})
 }
 
@@ -301,25 +346,29 @@ hierarchy_query_reads_parent_and_depth :: proc(t: ^testing.T) {
 	a, b, c, d, e, f, g := build_tree(&world)
 
 	visited := 0
-	query := ecs.query_make_hierarchy(ecs.stuff_make(&world), .Transform, {.Position}, {})
-	for thing in ecs.query_iter(&query) {
+	query := ecs.hierarchy_query_make(ecs.stuff_make(&world), .Transform, {.Position}, {})
+	for thing in ecs.hierarchy_query_iter(&query) {
 		visited += 1
 		parent := ecs.get_parent(&query)
-		parent_pos, has_parent_pos := ecs.query_get_parent_part(&query, .Position, Position)
+		parent_pos, has_parent_pos := ecs.hierarchy_query_get_parent_part(
+			&query,
+			.Position,
+			Position,
+		)
 
 		switch thing {
 		case a, e:
 			testing.expect_value(t, parent, ecs.THING_NIL)
-			testing.expect_value(t, ecs.query_get_depth(&query), 0)
+			testing.expect_value(t, ecs.hierarchy_query_get_depth(&query), 0)
 			testing.expect(t, !has_parent_pos)
 		case c, d:
 			// b is the parent but has no Position.
 			testing.expect_value(t, parent, b)
-			testing.expect_value(t, ecs.query_get_depth(&query), 2)
+			testing.expect_value(t, ecs.hierarchy_query_get_depth(&query), 2)
 			testing.expect(t, !has_parent_pos)
 		case f, g:
 			testing.expect_value(t, parent, thing == f ? e : a)
-			testing.expect_value(t, ecs.query_get_depth(&query), 1)
+			testing.expect_value(t, ecs.hierarchy_query_get_depth(&query), 1)
 			testing.expect(t, has_parent_pos)
 			expect_part(t, &world, parent, .Position, parent_pos)
 		case:
@@ -339,12 +388,12 @@ hierarchy_query_skips_subtrees :: proc(t: ^testing.T) {
 	ecs.set_now(&world, b, .Position, Position{})
 
 	things: [dynamic; 16]ecs.Thing
-	query := ecs.query_make_hierarchy(ecs.stuff_make(&world), .Transform, {.Position}, {})
+	query := ecs.hierarchy_query_make(ecs.stuff_make(&world), .Transform, {.Position}, {})
 
 	// A subtree in the middle of the order, and one that runs to its end.
-	for thing in ecs.query_iter(&query) {
+	for thing in ecs.hierarchy_query_iter(&query) {
 		append(&things, thing)
-		if thing == b || thing == e do ecs.query_skip_subtree(&query)
+		if thing == b || thing == e do ecs.hierarchy_query_skip_subtree(&query)
 	}
 
 	want := []ecs.Thing{a, b, g, e}
@@ -476,31 +525,7 @@ hierarchy_query_unregistered_kind_asserts :: proc(t: ^testing.T) {
 	make_world(&world, mem.arena_allocator(&arena))
 
 	testing.expect_assert_message(t, "Hierarchy kind Inside is not registered.")
-	ecs.query_make_hierarchy(ecs.stuff_make(&world), .Inside, {.Position}, {})
-	testing.fail_now(t, "The call did not assert.")
-}
-
-@(test)
-hierarchy_procs_on_plain_query_assert :: proc(t: ^testing.T) {
-	// Nothing to check when asserts are compiled out.
-	when ODIN_DISABLE_ASSERT do return
-
-	// The assert skips any cleanup, so take the pools from an arena instead of the heap.
-	@(static) backing: [512 * mem.Kilobyte]byte
-	arena: mem.Arena
-	mem.arena_init(&arena, backing[:])
-
-	world: World
-	make_world(&world, mem.arena_allocator(&arena))
-	thing := ecs.spawn(&world)
-	ecs.set_now(&world, thing, .Position, Position{})
-
-	query := ecs.query_make(ecs.stuff_make(&world), {.Position}, {})
-	_, ok := ecs.query_iter(&query)
-	testing.expect(t, ok)
-
-	testing.expect_assert_message(t, "Query has no hierarchy, make it with query_make_hierarchy.")
-	ecs.query_get_depth(&query)
+	ecs.hierarchy_query_make(ecs.stuff_make(&world), .Inside, {.Position}, {})
 	testing.fail_now(t, "The call did not assert.")
 }
 
@@ -517,9 +542,9 @@ hierarchy_procs_without_current_thing_assert :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world, mem.arena_allocator(&arena))
 
-	query := ecs.query_make_hierarchy(ecs.stuff_make(&world), .Transform, {.Position}, {})
+	query := ecs.hierarchy_query_make(ecs.stuff_make(&world), .Transform, {.Position}, {})
 
 	testing.expect_assert_message(t, "Query has no current thing.")
-	ecs.query_skip_subtree(&query)
+	ecs.hierarchy_query_skip_subtree(&query)
 	testing.fail_now(t, "The call did not assert.")
 }
