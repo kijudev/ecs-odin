@@ -27,8 +27,6 @@ Kind :: enum {
 }
 
 PARTS :: bit_set[Kind]{.Position, .Velocity, .Health, .Tag, .Target}
-STASHES :: bit_set[Kind]{.Time, .Gravity, .Flag, .Big, .Marker}
-HIERARCHIES :: bit_set[Kind]{.Transform, .Inside}
 
 // >---------------------------------------------------------------------- Parts
 

@@ -82,7 +82,7 @@ Advances the iterator.
 
 Returns the next kind and true, or false once every kind was returned.
 */
-archetype_iter_next :: proc(it: ^Archetype_Iter($K)) -> (K, bool) {
+archetype_iter :: proc(it: ^Archetype_Iter($K)) -> (K, bool) {
 	for kind in it.rest {
 		it.rest -= {kind}
 		return kind, true

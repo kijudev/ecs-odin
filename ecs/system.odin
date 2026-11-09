@@ -6,7 +6,7 @@ import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
 
-/* A scheduled system, with the part kinds it reads and writes and the stage it runs in. */
+/* A scheduled system, with the kinds it reads and writes and the stage it runs in. */
 System_Info :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
 	system: proc(stuff: Stuff(K, S)),
@@ -45,7 +45,7 @@ System_Graph :: struct {
 
 // >---------------------------------------------------------------- System_Info
 
-/* Checks whether the systems conflict: one writes a part kind the other reads or writes. */
+/* Checks whether the systems conflict: one writes a kind the other reads or writes. */
 system_info_conflicts :: proc(a, b: ^System_Info($K, $S)) -> bool {
 	return a.writes & b.writes != {} || a.writes & b.reads != {} || a.reads & b.writes != {}
 }
@@ -99,7 +99,7 @@ system_pool_reset :: proc(pool: ^System_Pool($K, $S)) {
 }
 
 /*
-Schedules the system in `stage`, declaring the part kinds it reads and writes. Of two conflicting
+Schedules the system in `stage`, declaring the kinds it reads and writes. Of two conflicting
 systems, the one scheduled first runs first. The stage's graph is stale until
 `system_pool_build_graphs`.
 

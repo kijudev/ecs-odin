@@ -79,7 +79,7 @@ archetype_iter_yields_each_kind_once_in_order :: proc(t: ^testing.T) {
 
 	seen: [dynamic; 8]Kind
 	it := ecs.archetype_iter_make(a)
-	for kind in ecs.archetype_iter_next(&it) do append(&seen, kind)
+	for kind in ecs.archetype_iter(&it) do append(&seen, kind)
 
 	testing.expect_value(t, len(seen), 3)
 	if len(seen) != 3 do return
@@ -88,21 +88,21 @@ archetype_iter_yields_each_kind_once_in_order :: proc(t: ^testing.T) {
 	testing.expect_value(t, seen[2], Kind.Target)
 
 	// Done stays done.
-	_, ok := ecs.archetype_iter_next(&it)
+	_, ok := ecs.archetype_iter(&it)
 	testing.expect(t, !ok)
 }
 
 @(test)
 archetype_iter_of_empty_yields_nothing :: proc(t: ^testing.T) {
 	it := ecs.archetype_iter_make(Archetype{})
-	for _ in ecs.archetype_iter_next(&it) do testing.fail_now(t, "Empty archetype yielded a kind.")
+	for _ in ecs.archetype_iter(&it) do testing.fail_now(t, "Empty archetype yielded a kind.")
 }
 
 @(test)
 archetype_iter_does_not_change_the_archetype :: proc(t: ^testing.T) {
 	a := ecs.archetype_make(bit_set[Kind]{.Position, .Health})
 	it := ecs.archetype_iter_make(a)
-	for _ in ecs.archetype_iter_next(&it) {}
+	for _ in ecs.archetype_iter(&it) {}
 
 	testing.expect(t, ecs.archetype_has(a, .Position))
 	testing.expect(t, ecs.archetype_has(a, .Health))

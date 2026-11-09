@@ -11,7 +11,7 @@ import "core:mem"
 /*
 Everything the ECS keeps: things, their parts and hierarchies, stashes, deferred commands and
 scheduled systems.
-`K` is the one enum of part and stash kinds, `S` the enum of system stages.
+`K` is the one enum of part, stash and hierarchy kinds, `S` the enum of system stages.
 */
 World :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
@@ -102,9 +102,9 @@ world_destroy :: proc(world: ^World($K, $S)) {
 }
 
 /*
-Kills every thing, zeroes every stash and drops the commands recorded with the `_later` procs
-without applying them. `destroy` runs on every part and stash. Registrations and scheduled systems
-are kept.
+Kills every thing, empties every hierarchy, zeroes every stash and drops the commands recorded with
+the `_later` procs without applying them. `destroy` runs on every part and stash. Registrations
+and scheduled systems are kept.
 */
 world_reset :: proc(world: ^World($K, $S)) {
 	thing_pool_reset(&world.thing_pool)
@@ -152,7 +152,7 @@ world_kill_now :: proc(world: ^World($K, $S), thing: Thing) -> bool {
 	if !thing_pool_is_alive(world.thing_pool, thing) do return false
 
 	it := archetype_iter_make(archetype_pool_get(world.archetype_pool, thing))
-	for kind in archetype_iter_next(&it) {
+	for kind in archetype_iter(&it) {
 		part_pool_remove_unchecked(&world.part_pool, thing, kind)
 	}
 
@@ -557,9 +557,9 @@ world_apply_buffer :: proc(world: ^World($K, $S), buffer: ^Cmd_Buffer(K)) {
 // >-------------------------------------------------------------- World Systems
 
 /*
-Schedules a system into a stage, with the kinds it reads and writes. Part and stash kinds both
-count. Systems whose kinds conflict run in schedule order, nothing checks that a system only
-touches what it declared.
+Schedules a system into a stage, with the kinds it reads and writes. Part, stash and hierarchy
+kinds all count. Systems whose kinds conflict run in schedule order, nothing checks that a system
+only touches what it declared.
 
 Asserts:
 - `system` is not nil.

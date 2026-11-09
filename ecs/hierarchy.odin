@@ -543,7 +543,11 @@ hierarchy_pool_is_registered :: proc(pool: ^Hierarchy_Pool($K), kind: K) -> bool
 	return kind in pool.registered
 }
 
-/* Asserts that `kind` is registered as a hierarchy. */
+/*
+Asserts that `kind` is registered as a hierarchy, reporting `loc`. Disabled with
+ODIN_DISABLE_ASSERT.
+*/
+@(disabled = ODIN_DISABLE_ASSERT)
 hierarchy_pool_assert_registered :: proc(
 	pool: ^Hierarchy_Pool($K),
 	kind: K,
@@ -581,26 +585,24 @@ hierarchy_pool_remove_all :: proc(pool: ^Hierarchy_Pool($K), thing: Thing) {
 
 // >------------------------------------------------------------------ Internals
 
-@(private = "file")
+@(private = "file", disabled = ODIN_DISABLE_ASSERT)
 hierarchy_set_assert_thing :: proc(set: ^Hierarchy_Set, thing: Thing) {
-	when !ODIN_DISABLE_ASSERT {
-		fmt.assertf(thing != THING_NIL, "Hierarchy thing can't be THING_NIL.")
-		fmt.assertf(
-			int(thing.idx) < len(set.nodes),
-			"Hierarchy thing idx %v is out of range, the capacity is %v.",
-			thing.idx,
-			len(set.nodes),
-		)
+	fmt.assertf(thing != THING_NIL, "Hierarchy thing can't be THING_NIL.")
+	fmt.assertf(
+		int(thing.idx) < len(set.nodes),
+		"Hierarchy thing idx %v is out of range, the capacity is %v.",
+		thing.idx,
+		len(set.nodes),
+	)
 
-		self := hierarchy_node_self(set, thing.idx)
-		fmt.assertf(
-			self == THING_NIL || self == thing,
-			"Hierarchy thing %v has gen %v, the hierarchy holds gen %v.",
-			thing.idx,
-			thing.gen,
-			self.gen,
-		)
-	}
+	self := hierarchy_node_self(set, thing.idx)
+	fmt.assertf(
+		self == THING_NIL || self == thing,
+		"Hierarchy thing %v has gen %v, the hierarchy holds gen %v.",
+		thing.idx,
+		thing.gen,
+		self.gen,
+	)
 }
 
 @(private = "file")

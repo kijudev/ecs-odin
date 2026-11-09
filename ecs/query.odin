@@ -220,7 +220,7 @@ find_first_kind :: proc(query: ^Query($K, $S)) -> K {
 	size := max(int)
 
 	it := archetype_iter_make(query.include)
-	for k in archetype_iter_next(&it) {
+	for k in archetype_iter(&it) {
 		count := part_pool_count_parts(&query.stuff.world.part_pool, k)
 		if count < size {
 			size = count
@@ -234,6 +234,6 @@ find_first_kind :: proc(query: ^Query($K, $S)) -> K {
 @(private = "file")
 check_conflicts :: proc(include: Archetype($K), exclude: Archetype(K)) -> (K, bool) {
 	it := archetype_iter_make(archetype_intersect(include, exclude))
-	for kind in archetype_iter_next(&it) do return kind, false
+	for kind in archetype_iter(&it) do return kind, false
 	return K{}, true
 }

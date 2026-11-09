@@ -99,7 +99,7 @@ and frees the buffer.
 `Archetype($K)` is the set of part kinds a thing has. It is a `bit_set[K]` underneath, but only
 the `archetype_*` procs touch it: `has`, `insert`, `remove`, `clear`, `is_empty`, `contains`
 (every kind of the other one is in it), `is_disjoint` and `intersect`. Iterate it with
-`it := archetype_iter_make(a)` and `for kind in archetype_iter_next(&it)`.
+`it := archetype_iter_make(a)` and `for kind in archetype_iter(&it)`.
 
 `Archetype_Pool($K)` keeps one `Archetype` per thing idx. Like the part pool it doesn't know if a
 thing is alive.
