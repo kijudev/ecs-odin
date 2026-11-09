@@ -1,0 +1,38 @@
+# Comparison benchmarks, see CASES.md. Extra args go to the binary, e.g.
+#   just entt 100000 --case 'query.*'
+# Override the compilers with `just cxx=g++ cc=gcc ...` (the nix shell's $CXX is g++).
+
+cxx := "clang++"
+cc := "clang"
+cxxflags := "-std=c++23 -O3 -DNDEBUG -Wall -Icommon"
+sizes := "10000,100000,1000000"
+
+default: quick
+
+# Every library at 100k, then the comparison.
+quick: (oecs "100000") (entt "100000") (flecs "100000") compare
+
+# Every library at every size, then the comparison.
+full: (oecs sizes) (entt sizes) (flecs sizes) compare
+
+oecs n=sizes *args: _dir
+    odin build oecs -o:speed -disable-assert -no-bounds-check -out:build/oecs
+    build/oecs --n {{n}} {{args}} > build/oecs.csv
+
+entt n=sizes *args: _dir
+    {{cxx}} {{cxxflags}} -I"$ENTT_INCLUDE" entt/*.cpp common/*.cpp -o build/entt
+    build/entt --n {{n}} {{args}} > build/entt.csv
+
+flecs n=sizes *args: _dir
+    @[ -f build/flecs.o ] || {{cc}} -std=gnu99 -O3 -DNDEBUG -c "$FLECS_SRC/distr/flecs.c" -o build/flecs.o
+    {{cxx}} {{cxxflags}} -I"$FLECS_SRC/distr" flecs/*.cpp common/*.cpp build/flecs.o -o build/flecs
+    build/flecs --n {{n}} {{args}} > build/flecs.csv
+
+compare:
+    python3 compare.py build/*.csv
+
+clean:
+    rm -rf build
+
+_dir:
+    @mkdir -p build

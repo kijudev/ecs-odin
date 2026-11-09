@@ -6,15 +6,13 @@ import ecs "../ecs"
 
 // >---------------------------------------------------------------------- Kinds
 
-// Parts, stashes and hierarchies share one enum. Which one a kind is depends on how it gets
-// registered.
 Kind :: enum {
 	// Parts
 	Position,
 	Velocity,
 	Health,
 	Tag,
-	Target, // shares the Position type
+	Target,
 
 	// Stashes
 	Time,
@@ -82,7 +80,6 @@ Stage :: enum {
 	Render,
 }
 
-// Every system appends its id here, so tests can check what ran and in which order.
 @(thread_local)
 system_log: [dynamic; 64]int
 
@@ -114,7 +111,6 @@ Stuff :: ecs.Stuff(Kind, Stage)
 
 // >-------------------------------------------------------------------- Helpers
 
-// Expects the thing to have the part, with the value `want`.
 expect_part :: proc(
 	t: ^testing.T,
 	world: ^World,
