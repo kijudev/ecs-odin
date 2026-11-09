@@ -37,6 +37,16 @@ stuff_kill_later :: proc(stuff: Stuff($K, $S), thing: Thing) {
 	world_kill_later(stuff.world, thing)
 }
 
+/* See kill_tree_now. */
+stuff_kill_tree_now :: proc(stuff: Stuff($K, $S), kind: K, thing: Thing) -> bool {
+	return world_kill_tree_now(stuff.world, kind, thing)
+}
+
+/* See kill_tree_later. */
+stuff_kill_tree_later :: proc(stuff: Stuff($K, $S), kind: K, thing: Thing) {
+	world_kill_tree_later(stuff.world, kind, thing)
+}
+
 /* See is_alive. */
 stuff_is_alive :: proc(stuff: Stuff($K, $S), thing: Thing) -> bool {
 	return world_is_alive(stuff.world, thing)
@@ -141,6 +151,82 @@ stuff_add_later :: proc(stuff: Stuff($K, $S), thing: Thing, kind: K) {
 /* See remove_later. */
 stuff_remove_later :: proc(stuff: Stuff($K, $S), thing: Thing, kind: K) {
 	world_remove_later(stuff.world, thing, kind)
+}
+
+// >------------------------------------------------------------ Stuff Hierarchy
+
+/* See attach_now. */
+stuff_attach_now :: proc(stuff: Stuff($K, $S), kind: K, child, parent: Thing) -> bool {
+	return world_attach_now(stuff.world, kind, child, parent)
+}
+
+/* See attach_later. */
+stuff_attach_later :: proc(stuff: Stuff($K, $S), kind: K, child, parent: Thing) {
+	world_attach_later(stuff.world, kind, child, parent)
+}
+
+/* See detach_now. */
+stuff_detach_now :: proc(stuff: Stuff($K, $S), kind: K, child: Thing) -> bool {
+	return world_detach_now(stuff.world, kind, child)
+}
+
+/* See detach_later. */
+stuff_detach_later :: proc(stuff: Stuff($K, $S), kind: K, child: Thing) {
+	world_detach_later(stuff.world, kind, child)
+}
+
+/* See get_parent. */
+stuff_get_parent :: proc(stuff: Stuff($K, $S), kind: K, child: Thing) -> Thing {
+	return world_get_parent(stuff.world, kind, child)
+}
+
+/* See get_first_child. */
+stuff_get_first_child :: proc(stuff: Stuff($K, $S), kind: K, parent: Thing) -> Thing {
+	return world_get_first_child(stuff.world, kind, parent)
+}
+
+/* See get_next_sibling. */
+stuff_get_next_sibling :: proc(stuff: Stuff($K, $S), kind: K, child: Thing) -> Thing {
+	return world_get_next_sibling(stuff.world, kind, child)
+}
+
+/* See iter_children. */
+stuff_iter_children :: proc(
+	stuff: Stuff($K, $S),
+	kind: K,
+	parent: Thing,
+) -> Hierarchy_Children_Iter {
+	return world_iter_children(stuff.world, kind, parent)
+}
+
+/* See iter_roots. */
+stuff_iter_roots :: proc(stuff: Stuff($K, $S), kind: K) -> Hierarchy_Children_Iter {
+	return world_iter_roots(stuff.world, kind)
+}
+
+/* See is_ancestor. */
+stuff_is_ancestor :: proc(stuff: Stuff($K, $S), kind: K, ancestor, thing: Thing) -> bool {
+	return world_is_ancestor(stuff.world, kind, ancestor, thing)
+}
+
+/* See get_hierarchy_order. */
+stuff_get_hierarchy_order :: proc(stuff: Stuff($K, $S), kind: K) -> []Thing {
+	return world_get_hierarchy_order(stuff.world, kind)
+}
+
+/* See get_hierarchy_depths. */
+stuff_get_hierarchy_depths :: proc(stuff: Stuff($K, $S), kind: K) -> []Hierarchy_Depth {
+	return world_get_hierarchy_depths(stuff.world, kind)
+}
+
+/* See get_hierarchy_ends. */
+stuff_get_hierarchy_ends :: proc(stuff: Stuff($K, $S), kind: K) -> []Hierarchy_Pos {
+	return world_get_hierarchy_ends(stuff.world, kind)
+}
+
+/* See get_subtree. */
+stuff_get_subtree :: proc(stuff: Stuff($K, $S), kind: K, thing: Thing) -> []Thing {
+	return world_get_subtree(stuff.world, kind, thing)
 }
 
 // >-------------------------------------------------------------- Stuff Stashes

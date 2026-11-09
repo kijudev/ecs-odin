@@ -68,7 +68,10 @@ main :: proc() {
 	seed(&world)
 
 	for _ in 0 ..< 5 {
-		ecs.world_run_sync(&world)
+		for stage in Stage {
+			ecs.world_run_stage_sync(&world, stage)
+			ecs.world_apply(&world)
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package ecs
 
 import "base:intrinsics"
+import "base:runtime"
 import "core:fmt"
 import "core:mem"
 
@@ -8,13 +9,15 @@ import "core:mem"
 // >-------------------------------------------------------- Constants and Types
 
 /*
-Everything the ECS keeps: things, their parts, stashes, deferred commands and scheduled systems.
+Everything the ECS keeps: things, their parts and hierarchies, stashes, deferred commands and
+scheduled systems.
 `K` is the one enum of part and stash kinds, `S` the enum of system stages.
 */
 World :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
 	thing_pool:     Thing_Pool,
 	archetype_pool: Archetype_Pool(K),
+	hierarchy_pool: Hierarchy_Pool(K),
 	cmd_buffer:     Cmd_Buffer(K),
 	part_pool:      Part_Pool(K),
 	stash_pool:     Stash_Pool(K),
@@ -25,8 +28,9 @@ World :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 How to size and allocate a world. A zero field takes its default: the matching
 `*_DEFAULT_CAPACITY` constant, or `context.allocator` for an allocator.
 
-`static_allocator` gets everything sized here: the thing, archetype, stash and system pools. It
-allocates only in `world_init` and frees only in `world_destroy`, so an arena fits.
+`static_allocator` gets everything sized here: the thing, archetype, stash and system pools, and
+the set of every registered hierarchy. It allocates only during setup, in `world_init` and the
+`register_*` procs, and frees only in `world_destroy`, so an arena fits.
 `dynamic_allocator` gets everything that grows with use: the part sets and the command buffer. It
 allocates, resizes and frees during play.
 */
@@ -45,8 +49,8 @@ World_Params :: struct {
 /*
 Initializes the world, sized and allocated by `params`. See World_Params.
 
-`capacity` caps the number of things, `stash_capacity` the bytes of all stashes together and
-`system_capacity` the systems of each stage. `cmd_capacity` and `cmd_parts_capacity` are only the
+`capacity` caps the number of things and sizes every hierarchy registered later, `stash_capacity`
+the bytes of all stashes together and `system_capacity` the systems of each stage. `cmd_capacity` and `cmd_parts_capacity` are only the
 starting room of the command buffer, it grows past them.
 
 Asserts:
@@ -68,6 +72,7 @@ world_init :: proc(world: ^World($K, $S), params := World_Params{}) {
 
 	thing_pool_init(&world.thing_pool, params.capacity, params.static_allocator)
 	archetype_pool_init(&world.archetype_pool, params.capacity, params.static_allocator)
+	hierarchy_pool_init(&world.hierarchy_pool, params.capacity, params.static_allocator)
 	stash_pool_init(&world.stash_pool, params.stash_capacity, params.static_allocator)
 	system_pool_init(&world.system_pool, params.system_capacity, params.static_allocator)
 
@@ -86,6 +91,7 @@ Runs `destroy` on every part and stash, frees every pool and zeroes the world.
 world_destroy :: proc(world: ^World($K, $S)) {
 	thing_pool_destroy(&world.thing_pool)
 	archetype_pool_destroy(&world.archetype_pool)
+	hierarchy_pool_destroy(&world.hierarchy_pool)
 	cmd_buffer_destroy(&world.cmd_buffer)
 	part_pool_destroy(&world.part_pool)
 	stash_pool_destroy(&world.stash_pool)
@@ -102,6 +108,7 @@ are kept.
 world_reset :: proc(world: ^World($K, $S)) {
 	thing_pool_reset(&world.thing_pool)
 	archetype_pool_reset(&world.archetype_pool)
+	hierarchy_pool_reset(&world.hierarchy_pool)
 	cmd_buffer_reset(&world.cmd_buffer)
 	part_pool_reset(&world.part_pool)
 	stash_pool_reset(&world.stash_pool)
@@ -117,6 +124,11 @@ world_register_part :: proc(
 	fmt.assertf(
 		!stash_pool_is_registered(&world.stash_pool, kind),
 		"Kind %v is already registered as a stash.",
+		kind,
+	)
+	fmt.assertf(
+		!hierarchy_pool_is_registered(&world.hierarchy_pool, kind),
+		"Kind %v is already registered as a hierarchy.",
 		kind,
 	)
 	part_pool_register(&world.part_pool, kind, T, destroy)
@@ -144,7 +156,24 @@ world_kill_now :: proc(world: ^World($K, $S), thing: Thing) -> bool {
 	}
 
 	archetype_pool_remove_all(&world.archetype_pool, thing)
+	hierarchy_pool_remove_all(&world.hierarchy_pool, thing)
 	thing_pool_kill_unchecked(&world.thing_pool, thing)
+	return true
+}
+
+/* See kill_tree_now. */
+world_kill_tree_now :: proc(world: ^World($K, $S), kind: K, thing: Thing) -> bool {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, thing) do return false
+
+	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
+
+	buffer, err := make([]Thing, hierarchy_set_count(set) + 1, context.temp_allocator)
+	if err != nil do panic("Failed to allocate memory for killing a tree.")
+
+	tree := hierarchy_set_collect_subtree(set, thing, buffer)
+	#reverse for tree_thing in tree do world_kill_now(world, tree_thing)
+
 	return true
 }
 
@@ -242,6 +271,11 @@ world_register_stash :: proc(
 		"Kind %v is already registered as a part.",
 		kind,
 	)
+	fmt.assertf(
+		!hierarchy_pool_is_registered(&world.hierarchy_pool, kind),
+		"Kind %v is already registered as a hierarchy.",
+		kind,
+	)
 	stash_pool_register(&world.stash_pool, kind, T, destroy)
 }
 
@@ -255,12 +289,194 @@ world_get_stash :: proc(world: ^World($K, $S), kind: K, $T: typeid) -> ^T {
 	return stash_pool_get(&world.stash_pool, kind, T)
 }
 
+// >------------------------------------------------------------ World Hierarchy
+
+/* See register_hierarchy. */
+world_register_hierarchy :: proc(world: ^World($K, $S), kind: K) {
+	fmt.assertf(
+		!part_pool_is_registered(&world.part_pool, kind),
+		"Kind %v is already registered as a part.",
+		kind,
+	)
+	fmt.assertf(
+		!stash_pool_is_registered(&world.stash_pool, kind),
+		"Kind %v is already registered as a stash.",
+		kind,
+	)
+	hierarchy_pool_register(&world.hierarchy_pool, kind)
+}
+
+/* See is_hierarchy_registered. */
+world_is_hierarchy_registered :: proc(world: ^World($K, $S), kind: K) -> bool {
+	return hierarchy_pool_is_registered(&world.hierarchy_pool, kind)
+}
+
+/* See attach_now. */
+world_attach_now :: proc(world: ^World($K, $S), kind: K, child, parent: Thing) -> bool {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, child) do return false
+	if !thing_pool_is_alive(world.thing_pool, parent) do return false
+
+	hierarchy_set_attach(set, child, parent)
+	return true
+}
+
+/* See detach_now. */
+world_detach_now :: proc(world: ^World($K, $S), kind: K, child: Thing) -> bool {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, child) do return false
+
+	return hierarchy_set_detach(set, child)
+}
+
+/* See get_parent. */
+world_get_parent :: proc(world: ^World($K, $S), kind: K, child: Thing) -> Thing {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, child) do return THING_NIL
+
+	return hierarchy_set_parent(set, child)
+}
+
+/* See get_first_child. */
+world_get_first_child :: proc(world: ^World($K, $S), kind: K, parent: Thing) -> Thing {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, parent) do return THING_NIL
+
+	return hierarchy_set_first_child(set, parent)
+}
+
+/* See get_next_sibling. */
+world_get_next_sibling :: proc(world: ^World($K, $S), kind: K, child: Thing) -> Thing {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, child) do return THING_NIL
+
+	return hierarchy_set_next_sibling(set, child)
+}
+
+/* See iter_children. */
+world_iter_children :: proc(
+	world: ^World($K, $S),
+	kind: K,
+	parent: Thing,
+) -> Hierarchy_Children_Iter {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, parent) do return Hierarchy_Children_Iter{set = set}
+
+	return hierarchy_set_iter_children(set, parent)
+}
+
+/* See iter_roots. */
+world_iter_roots :: proc(world: ^World($K, $S), kind: K) -> Hierarchy_Children_Iter {
+	return hierarchy_set_iter_roots(hierarchy_pool_get_set(&world.hierarchy_pool, kind))
+}
+
+/* See is_ancestor. */
+world_is_ancestor :: proc(world: ^World($K, $S), kind: K, ancestor, thing: Thing) -> bool {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, ancestor) do return false
+	if !thing_pool_is_alive(world.thing_pool, thing) do return false
+
+	return hierarchy_set_is_ancestor(set, ancestor, thing)
+}
+
+/* See get_hierarchy_order. */
+world_get_hierarchy_order :: proc(world: ^World($K, $S), kind: K) -> []Thing {
+	return hierarchy_set_order(hierarchy_pool_get_set(&world.hierarchy_pool, kind))
+}
+
+/* See get_hierarchy_depths. */
+world_get_hierarchy_depths :: proc(world: ^World($K, $S), kind: K) -> []Hierarchy_Depth {
+	return hierarchy_set_depths(hierarchy_pool_get_set(&world.hierarchy_pool, kind))
+}
+
+/* See get_hierarchy_ends. */
+world_get_hierarchy_ends :: proc(world: ^World($K, $S), kind: K) -> []Hierarchy_Pos {
+	return hierarchy_set_ends(hierarchy_pool_get_set(&world.hierarchy_pool, kind))
+}
+
+/* See get_subtree. */
+world_get_subtree :: proc(world: ^World($K, $S), kind: K, thing: Thing) -> []Thing {
+	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
+	if !thing_pool_is_alive(world.thing_pool, thing) do return nil
+
+	return hierarchy_set_subtree(set, thing)
+}
+
+/*
+Checks whether things were attached, detached or killed in the hierarchy of `kind` since its last
+rebuild.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+world_is_hierarchy_dirty :: proc(world: ^World($K, $S), kind: K) -> bool {
+	return hierarchy_set_is_dirty(hierarchy_pool_get_set(&world.hierarchy_pool, kind))
+}
+
+/*
+Flattens the hierarchy of `kind` into the order that `get_hierarchy_order`,
+`get_hierarchy_depths`, `get_hierarchy_ends`, `get_subtree` and `is_ancestor` read. Nothing calls
+it on its own, so call it wherever the main loop needs those to be up to date. See
+hierarchy_set_rebuild.
+
+Asserts:
+- `kind` is a registered hierarchy.
+- No thing is deeper than HIERARCHY_MAX_DEPTH.
+*/
+world_rebuild_hierarchy :: proc(world: ^World($K, $S), kind: K) {
+	hierarchy_set_rebuild(hierarchy_pool_get_set(&world.hierarchy_pool, kind))
+}
+
+/*
+Rebuilds every registered hierarchy that changed since its last rebuild, see
+`world_rebuild_hierarchy`.
+
+Asserts:
+- No thing is deeper than HIERARCHY_MAX_DEPTH.
+*/
+world_rebuild_hierarchies :: proc(world: ^World($K, $S)) {
+	pool := &world.hierarchy_pool
+	for kind in pool.registered {
+		set := &pool.sets[kind]
+		if hierarchy_set_is_dirty(set) do hierarchy_set_rebuild(set)
+	}
+}
+
 // >------------------------------------------------------------- World Commands
 
 /* See kill_later. */
 world_kill_later :: proc(world: ^World($K, $S), thing: Thing) {
 	if thing == THING_NIL do return
 	cmd_buffer_record_kill(&world.cmd_buffer, thing)
+}
+
+/* See kill_tree_later. */
+world_kill_tree_later :: proc(world: ^World($K, $S), kind: K, thing: Thing) {
+	hierarchy_pool_assert_registered(&world.hierarchy_pool, kind)
+	if thing == THING_NIL do return
+
+	cmd_buffer_record_kill_tree(&world.cmd_buffer, kind, thing)
+}
+
+/* See attach_later. */
+world_attach_later :: proc(world: ^World($K, $S), kind: K, child, parent: Thing) {
+	hierarchy_pool_assert_registered(&world.hierarchy_pool, kind)
+	if child == THING_NIL || parent == THING_NIL do return
+
+	fmt.assertf(
+		child.idx != parent.idx,
+		"Hierarchy thing %v can't be attached to itself.",
+		child.idx,
+	)
+	cmd_buffer_record_attach(&world.cmd_buffer, kind, child, parent)
+}
+
+/* See detach_later. */
+world_detach_later :: proc(world: ^World($K, $S), kind: K, child: Thing) {
+	hierarchy_pool_assert_registered(&world.hierarchy_pool, kind)
+	if child == THING_NIL do return
+
+	cmd_buffer_record_detach(&world.cmd_buffer, kind, child)
 }
 
 /* See set_later. */
@@ -363,9 +579,9 @@ world_count_systems :: proc(world: ^World($K, $S)) -> int {
 }
 
 /*
-Runs every system of the stage once on this thread, ordered by their conflicts, then applies the
-commands they recorded. The stage graph is rebuilt first when systems were scheduled since the
-last run.
+Runs every system of the stage once on this thread, ordered by their conflicts. The commands they
+record stay in the buffer until `world_apply`. The stage graph is rebuilt first when systems were
+scheduled since the last run.
 */
 world_run_stage_sync :: proc(world: ^World($K, $S), stage: S) {
 	pool := &world.system_pool
@@ -375,7 +591,6 @@ world_run_stage_sync :: proc(world: ^World($K, $S), stage: S) {
 	if graph.system_count != len(systems) do system_graph_build(graph, systems)
 
 	system_pool_run_stage_sync(pool, stage, stuff_make(world))
-	world_apply(world)
 }
 
 /* Runs every stage with `world_run_stage_sync`, in the order of `S`. */
@@ -418,6 +633,20 @@ apply_cmds :: proc(world: ^World($K, $S), buffer: ^Cmd_Buffer(K)) {
 
 		case Cmd_Remove(K):
 			world_remove_now(world, c.thing, c.kind)
+
+		case Cmd_Attach(K):
+			set := hierarchy_pool_get_set(&world.hierarchy_pool, c.kind)
+			if !thing_pool_is_alive(world.thing_pool, c.child) do continue
+			if !thing_pool_is_alive(world.thing_pool, c.parent) do continue
+			if !hierarchy_set_can_attach(set, c.child, c.parent) do continue
+
+			hierarchy_set_attach(set, c.child, c.parent)
+
+		case Cmd_Detach(K):
+			world_detach_now(world, c.kind, c.child)
+
+		case Cmd_Kill_Tree(K):
+			world_kill_tree_now(world, c.kind, c.thing)
 		}
 	}
 }

@@ -88,6 +88,39 @@ cmd_buffer_record_kill_stores_thing :: proc(t: ^testing.T) {
 }
 
 @(test)
+cmd_buffer_record_hierarchy_stores_things :: proc(t: ^testing.T) {
+	things: ecs.Thing_Pool
+	a, b := make_things(&things)
+	defer ecs.thing_pool_destroy(&things)
+	buffer: Cmd_Buffer
+	ecs.cmd_buffer_init(&buffer)
+	defer ecs.cmd_buffer_destroy(&buffer)
+
+	ecs.cmd_buffer_record_attach(&buffer, .Transform, a, b)
+	ecs.cmd_buffer_record_detach(&buffer, .Inside, a)
+	ecs.cmd_buffer_record_kill_tree(&buffer, .Transform, b)
+
+	testing.expect_value(t, len(buffer.cmds), 3)
+
+	attach, attach_ok := buffer.cmds[0].(ecs.Cmd_Attach(Kind))
+	testing.expect(t, attach_ok)
+	testing.expect_value(t, attach.kind, Kind.Transform)
+	testing.expect_value(t, attach.child, a)
+	testing.expect_value(t, attach.parent, b)
+
+	detach, detach_ok := buffer.cmds[1].(ecs.Cmd_Detach(Kind))
+	testing.expect(t, detach_ok)
+	testing.expect_value(t, detach.kind, Kind.Inside)
+	testing.expect_value(t, detach.child, a)
+
+	kill_tree, kill_tree_ok := buffer.cmds[2].(ecs.Cmd_Kill_Tree(Kind))
+	testing.expect(t, kill_tree_ok)
+	testing.expect_value(t, kill_tree.kind, Kind.Transform)
+	testing.expect_value(t, kill_tree.thing, b)
+	testing.expect_value(t, len(buffer.parts), 0)
+}
+
+@(test)
 cmd_buffer_record_set_value_stores_kind_and_part :: proc(t: ^testing.T) {
 	things: ecs.Thing_Pool
 	a, _ := make_things(&things)
@@ -142,8 +175,16 @@ cmd_buffer_record_set_value_packs_parts_in_order :: proc(t: ^testing.T) {
 	testing.expect_value(t, first.offset, 0)
 	testing.expect_value(t, second.offset, size_of(Position))
 	testing.expect_value(t, len(buffer.parts), size_of(Position) + size_of(Velocity))
-	testing.expect_value(t, ecs.cmd_buffer_get_part(&buffer, first.offset, Position), Position{1, 2})
-	testing.expect_value(t, ecs.cmd_buffer_get_part(&buffer, second.offset, Velocity), Velocity{3, 4})
+	testing.expect_value(
+		t,
+		ecs.cmd_buffer_get_part(&buffer, first.offset, Position),
+		Position{1, 2},
+	)
+	testing.expect_value(
+		t,
+		ecs.cmd_buffer_get_part(&buffer, second.offset, Velocity),
+		Velocity{3, 4},
+	)
 }
 
 @(test)
@@ -287,5 +328,9 @@ cmd_buffer_get_part_reads_misaligned_offset :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, aligned_cmd.offset, 1)
 	testing.expect_value(t, ecs.cmd_buffer_get_part(&buffer, byte_cmd.offset, u8), 7)
-	testing.expect_value(t, ecs.cmd_buffer_get_part(&buffer, aligned_cmd.offset, Aligned).value, 42)
+	testing.expect_value(
+		t,
+		ecs.cmd_buffer_get_part(&buffer, aligned_cmd.offset, Aligned).value,
+		42,
+	)
 }

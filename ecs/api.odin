@@ -8,7 +8,7 @@ on remove, overwrite, kill, reset and destroy.
 
 Asserts:
 - `kind` is not registered as a part yet.
-- `kind` is not registered as a stash.
+- `kind` is not registered as a stash or a hierarchy.
 */
 register_part :: world_register_part
 
@@ -21,7 +21,7 @@ and destroy.
 
 Asserts:
 - `kind` is not registered as a stash yet.
-- `kind` is not registered as a part.
+- `kind` is not registered as a part or a hierarchy.
 
 Panics:
 - the stash doesn't fit in the remaining stash capacity.
@@ -30,6 +30,20 @@ register_stash :: world_register_stash
 
 /* Checks whether `kind` is registered as a stash. */
 is_stash_registered :: world_is_stash_registered
+
+/*
+Registers `kind` as a hierarchy: one tree structure over things, with room for every thing the
+world can hold. Several kinds make several independent hierarchies. Put the kind in a system's
+`reads` or `writes` like a part kind to order systems that touch it.
+
+Asserts:
+- `kind` is not registered as a hierarchy yet.
+- `kind` is not registered as a part or a stash.
+*/
+register_hierarchy :: world_register_hierarchy
+
+/* Checks whether `kind` is registered as a hierarchy. */
+is_hierarchy_registered :: world_is_hierarchy_registered
 
 // >--------------------------------------------------------------------- Things
 
@@ -44,7 +58,8 @@ spawn :: proc {
 }
 
 /*
-Kills the thing and removes all its parts.
+Kills the thing and removes all its parts. It leaves every hierarchy, and its children there
+become roots.
 
 Returns false if the thing is already dead.
 */
@@ -60,6 +75,33 @@ is not recorded at all.
 kill_later :: proc {
 	world_kill_later,
 	stuff_kill_later,
+}
+
+/*
+Kills the thing and all its descendants in the hierarchy of `kind`, removing all their parts.
+Each one is killed after its descendants, as with `kill_now`, so it also leaves every other
+hierarchy and its children there become roots.
+
+Returns false if the thing is already dead.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+kill_tree_now :: proc {
+	world_kill_tree_now,
+	stuff_kill_tree_now,
+}
+
+/*
+Records a `kill_tree_now` to run on the next apply. The descendants are the ones the thing has by
+then. A thing that is dead by then is skipped, and THING_NIL is not recorded at all.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+kill_tree_later :: proc {
+	world_kill_tree_later,
+	stuff_kill_tree_later,
 }
 
 /*
@@ -251,6 +293,202 @@ Asserts:
 remove_later :: proc {
 	world_remove_later,
 	stuff_remove_later,
+}
+
+// >------------------------------------------------------------------ Hierarchy
+
+/*
+Attaches `child` as the last child of `parent` in the hierarchy of `kind`, moving it with its
+whole subtree if it already has a parent. Does nothing if `child` is already a child of `parent`.
+A thing is in a hierarchy only while it has a parent or a child there, so an old root parent left
+without children drops out. Killing a thing removes it from every hierarchy and makes its
+children roots, see `kill_tree_now` to kill them too.
+
+Returns false if either thing is dead.
+
+Asserts:
+- `kind` is a registered hierarchy.
+- `child` and `parent` are different things.
+- `parent` isn't a descendant of `child`.
+*/
+attach_now :: proc {
+	world_attach_now,
+	stuff_attach_now,
+}
+
+/*
+Records an `attach_now` to run on the next apply. It is skipped if either thing is dead by then,
+or if `parent` has become a descendant of `child`. THING_NIL is not recorded at all.
+
+Asserts:
+- `kind` is a registered hierarchy.
+- `child` and `parent` are different things.
+*/
+attach_later :: proc {
+	world_attach_later,
+	stuff_attach_later,
+}
+
+/*
+Detaches `child` from its parent and makes it a root, with its subtree still attached. A child
+without children drops out of the hierarchy instead, and so does a root parent left without
+children.
+
+Returns false if `child` is dead or has no parent.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+detach_now :: proc {
+	world_detach_now,
+	stuff_detach_now,
+}
+
+/*
+Records a `detach_now` to run on the next apply. It is skipped if `child` is dead or has no parent
+by then, and THING_NIL is not recorded at all.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+detach_later :: proc {
+	world_detach_later,
+	stuff_detach_later,
+}
+
+/*
+Gets the thing's parent.
+
+Returns THING_NIL if the thing is dead, a root or not in the hierarchy.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+get_parent :: proc {
+	world_get_parent,
+	stuff_get_parent,
+}
+
+/*
+Gets the thing's first child.
+
+Returns THING_NIL if the thing is dead or has no children.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+get_first_child :: proc {
+	world_get_first_child,
+	stuff_get_first_child,
+}
+
+/*
+Gets the thing's next sibling. Roots are siblings of each other.
+
+Returns THING_NIL if the thing is dead, the last sibling or not in the hierarchy.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+get_next_sibling :: proc {
+	world_get_next_sibling,
+	stuff_get_next_sibling,
+}
+
+/*
+Makes an iterator over the thing's children, in the order they were attached. Advance it with
+`for child in hierarchy_children_iter_next(&it)`. Attaching, detaching or killing while iterating
+is not supported.
+
+A dead thing has no children.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+iter_children :: proc {
+	world_iter_children,
+	stuff_iter_children,
+}
+
+/*
+Makes an iterator over the roots, see `iter_children`.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+iter_roots :: proc {
+	world_iter_roots,
+	stuff_iter_roots,
+}
+
+/*
+Checks whether `ancestor` is a strict ancestor of `thing`, as of the last rebuild of the
+hierarchy.
+
+Returns false if either thing is dead or wasn't in the hierarchy at the last rebuild.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+is_ancestor :: proc {
+	world_is_ancestor,
+	stuff_is_ancestor,
+}
+
+/*
+Gets every thing in the hierarchy as of its last `world_rebuild_hierarchy`: each tree in
+pre-order, roots in the order they became roots. Parents come before their children and every
+subtree is a contiguous range, see `get_hierarchy_ends`.
+
+Things killed since the last rebuild are still in it. The slice is valid until the next rebuild.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+get_hierarchy_order :: proc {
+	world_get_hierarchy_order,
+	stuff_get_hierarchy_order,
+}
+
+/*
+Gets the depth of every thing in `get_hierarchy_order`, roots are at depth 0.
+
+The slice is valid until the next rebuild.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+get_hierarchy_depths :: proc {
+	world_get_hierarchy_depths,
+	stuff_get_hierarchy_depths,
+}
+
+/*
+Gets, for every thing in `get_hierarchy_order`, the position one past its subtree. The subtree of
+the thing at `i` is `order[i:ends[i]]`.
+
+The slice is valid until the next rebuild.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+get_hierarchy_ends :: proc {
+	world_get_hierarchy_ends,
+	stuff_get_hierarchy_ends,
+}
+
+/*
+Gets the thing's subtree from `get_hierarchy_order`, starting with the thing itself.
+
+Returns nil if the thing is dead or wasn't in the hierarchy at the last rebuild. The slice is
+valid until the next rebuild.
+
+Asserts:
+- `kind` is a registered hierarchy.
+*/
+get_subtree :: proc {
+	world_get_subtree,
+	stuff_get_subtree,
 }
 
 // >-------------------------------------------------------------------- Stashes

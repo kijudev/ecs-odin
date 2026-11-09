@@ -4,7 +4,7 @@ import ecs "../ecs"
 
 // >---------------------------------------------------------------------- Kinds
 
-// Parts and stashes share one enum. Which one a kind is depends on how it gets registered.
+// Parts, stashes and hierarchies share one enum. Which one a kind is depends on how it gets registered.
 Kind :: enum {
 	// Parts
 	Position,
@@ -19,10 +19,15 @@ Kind :: enum {
 	Flag,
 	Big,
 	Marker,
+
+	// Hierarchies
+	Transform,
+	Inside,
 }
 
 PARTS :: bit_set[Kind]{.Position, .Velocity, .Health, .Tag, .Target}
 STASHES :: bit_set[Kind]{.Time, .Gravity, .Flag, .Big, .Marker}
+HIERARCHIES :: bit_set[Kind]{.Transform, .Inside}
 
 // >---------------------------------------------------------------------- Parts
 

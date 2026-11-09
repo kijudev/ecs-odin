@@ -104,10 +104,43 @@ the `archetype_*` procs touch it: `has`, `insert`, `remove`, `clear`, `is_empty`
 `Archetype_Pool($K)` keeps one `Archetype` per thing idx. Like the part pool it doesn't know if a
 thing is alive.
 
+# Hierarchies
+
+## Hierarchy Set
+
+`Hierarchy_Set` links things into trees. It knows nothing about kinds. It has two layers:
+
+- **Links**, the source of truth. One `Hierarchy_Node` per thing idx holds `parent`,
+  `first_child`, `next_sibling` and `prev_sibling`, each a full `Thing`. Siblings form a circular
+  list, so the first child's `prev_sibling` is the last child and attaching or detaching is O(1).
+  Node 0 is a virtual root whose children are the roots of every tree. A node knows its own handle
+  as `next_sibling.prev_sibling`, which lets the pool assert on stale handles without storing it.
+- **The order**, a cache. `hierarchy_pool_rebuild` walks the links and writes `order` (every tree in
+  pre-order), `depths`, `ends` (one past each subtree, so a subtree is `order[i:ends[i]]`) and
+  `pos` (thing idx to position). The walk needs no stack and no extra memory. Changing the links
+  only sets `is_dirty`; nothing rebuilds on its own.
+
+A thing is in the hierarchy only while it has a parent or a child. Detaching a leaf, or leaving a
+root without children, drops it out, so the order holds exactly the things in a relationship.
+Children keep the order they were attached in and roots the order they became roots, so the
+order is deterministic.
+
+The set doesn't know whether a thing is alive. The world checks liveness first and removes a
+thing from every set when it is killed, which makes its children roots. `kill_tree_now` collects
+the subtree from the links of one set and kills it bottom-up.
+
+## Hierarchy Pool
+
+`Hierarchy_Pool($K)` keeps one `Hierarchy_Set` per registered kind in a `[K]Hierarchy_Set`, like
+the part pool does with part sets. Registering a kind allocates its set with room for every
+thing idx, so a world pays for exactly the hierarchies it registers. `hierarchy_pool_get_set`
+asserts the kind is registered and hands out the set, and `hierarchy_pool_remove_all` removes a
+killed thing from every set.
+
 # Commands
 
 `Cmd_Buffer($K)` records deferred mutations as a `Cmd($K)` union (`Cmd_Kill`, `Cmd_Set_Value`,
-`Cmd_Set_Zero`, `Cmd_Remove`) in record order. It only stores commands; applying them is up to the caller.
+`Cmd_Set_Zero`, `Cmd_Remove`, `Cmd_Attach`, `Cmd_Detach`, `Cmd_Kill_Tree`) in record order. It only stores commands; applying them is up to the caller.
 
 Part values are copied into a single `parts` byte buffer, packed without padding. `Cmd_Set_Value`
 keeps the `offset` and `size` of its bytes. `cmd_buffer_get_bytes` returns them as a slice, valid until
@@ -117,7 +150,7 @@ packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buf
 
 # World
 
-`World($K, $S)` owns a `Thing_Pool`, a `Part_Pool(K)`, an `Archetype_Pool(K)`, a `Cmd_Buffer(K)`,
+`World($K, $S)` owns a `Thing_Pool`, a `Part_Pool(K)`, an `Archetype_Pool(K)`, a `Hierarchy_Pool(K)`, a `Cmd_Buffer(K)`,
 a `Stash_Pool(K)` and a `System_Pool(K, S)`. `S` is the enum of system stages. `world_init` takes a
 `World_Params`, where a zero field means its default, so `world_init(&world, {capacity = 1024})` is
 enough.
@@ -127,28 +160,34 @@ Sizes come in three kinds:
 - **Compile-time constants** are format limits: handle bit widths, the `u32` offsets of the command
   buffer, the page table of a part set. They aren't meant to be tuned.
 - **Capacities set at init** are what a game tunes: things, stash bytes, systems per stage. They are
-  allocated once with `static_allocator`, never move and are freed in `world_destroy`, so an arena
-  fits.
+  allocated during setup with `static_allocator` (in `world_init`, and in `register_hierarchy` for
+  each hierarchy's set), never move and are freed in `world_destroy`, so an arena fits.
 - **Growing storage** is what scales with play: part sets and the command buffer. It uses
   `dynamic_allocator`, which allocates, resizes and frees during play. Pointers into it are only
   valid until the next change, as each proc documents.
 
-`K` is one enum for parts and stashes alike. A kind becomes a part when it is registered with
-`register` and a stash when it is registered with `register_stash`, and it is never both: registering
-a kind in the other role asserts. Part and stash procs assert on a kind registered in the other
-role the same way they do on an unregistered one. Since `bit_set[K]` holds at most 128 kinds, parts
-and stashes share that limit.
+`K` is one enum for parts, stashes and hierarchies alike. A kind becomes a part when it is
+registered with `register_part`, a stash with `register_stash` and a hierarchy with
+`register_hierarchy`, and it only ever has one role: registering a kind in another role asserts.
+Part, stash and hierarchy procs assert on a kind registered in another role the same way they do
+on an unregistered one. Since `bit_set[K]` holds at most 128 kinds, all three share that limit.
+
+Hierarchy procs take the kind first, since it names which tree they work on:
+`attach_now(world, .Transform, child, parent)`, `kill_tree_now(world, .Transform, thing)`.
 
 Stashes are reached with `register_stash`, `is_stash_registered` and `get_stash`. They
 have no `_now`/`_later` variants, nothing about them is deferred.
 
 Mutations come in two flavours:
 
-- `_now` (`set_now`, `add_now`, `remove_now`, `kill_now`) apply immediately and report failure for
-  dead things by returning `nil`/`false`.
-- `_later` (`set_later`, `add_later`, `remove_later`, `kill_later`) record into the world's own
-  `Cmd_Buffer`. Kind and type are asserted when recording; liveness is checked when applying, so
-  commands for things that are dead by then are skipped. `THING_NIL` is never recorded.
+- `_now` (`set_now`, `add_now`, `remove_now`, `kill_now`, `kill_tree_now`, `attach_now`,
+  `detach_now`) apply immediately and report failure for dead things by returning `nil`/`false`.
+- `_later` (`set_later`, `add_later`, `remove_later`, `kill_later`, `kill_tree_later`,
+  `attach_later`, `detach_later`) record into the world's own `Cmd_Buffer`. Kind and type are
+  asserted when recording; liveness is checked when applying, so commands for things that are
+  dead by then are skipped. So is an `attach_later` that would close a cycle by then, since two
+  systems can each record a valid attach that only conflicts once both apply. `THING_NIL` is
+  never recorded.
 
 `world_apply` applies the world's buffer in record order and resets it. `world_apply_buffer` applies a
 buffer recorded elsewhere and leaves it untouched; the caller resets it, and may replay it into
@@ -164,9 +203,16 @@ buffer twice hands the same memory to two parts.
 Systems are `proc(stuff: Stuff(K, S))`, scheduled with `world_schedule` into a stage with the
 kinds they read and write. Stash kinds go into `reads` and `writes` like part kinds, so two systems
 touching the same stash are ordered the same way as two touching the same part. Nothing checks that
-a system only touches what it declared. `world_run_stage_sync` runs one stage and then applies the commands its
-systems recorded with `world_apply`, so `_later` changes become visible to the next stage.
-`world_run_sync` runs every stage in the order of `S`. The stage graph is rebuilt on the next run
+a system only touches what it declared. `world_run_stage_sync` runs one stage and
+`world_run_sync` runs every stage in the order of `S`. Neither applies commands: the main loop is
+the caller's, and it decides where the sync points go, with `world_apply` for commands and
+`world_rebuild_hierarchy` or `world_rebuild_hierarchies` for the hierarchy orders.
+
+A hierarchy kind goes into `reads` and `writes` like a part or stash kind. Only `attach_now`,
+`detach_now` and the kills write a hierarchy, and only the link reads (`get_parent`,
+`iter_children`, ...) read it in a way that can conflict. `_later` calls only touch the command
+buffer, and the order only changes at a rebuild, which runs outside systems. Note that `kill_now`
+writes every hierarchy and every part kind of the thing without declaring it. The stage graph is rebuilt on the next run
 whenever systems were scheduled since the last build. Everything runs on one thread for now.
 `world_reset` keeps the scheduled systems.
 

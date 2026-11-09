@@ -33,12 +33,34 @@ Cmd_Remove :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	kind:  K,
 }
 
+/* Attaches `child` as the last child of `parent` in the hierarchy of `kind`. */
+Cmd_Attach :: struct($K: typeid) where intrinsics.type_is_enum(K) {
+	kind:   K,
+	child:  Thing,
+	parent: Thing,
+}
+
+/* Detaches `child` from its parent in the hierarchy of `kind`. */
+Cmd_Detach :: struct($K: typeid) where intrinsics.type_is_enum(K) {
+	kind:  K,
+	child: Thing,
+}
+
+/* Kills `thing` and all its descendants in the hierarchy of `kind`. */
+Cmd_Kill_Tree :: struct($K: typeid) where intrinsics.type_is_enum(K) {
+	kind:  K,
+	thing: Thing,
+}
+
 /* A recorded change to the world. */
 Cmd :: union($K: typeid) where intrinsics.type_is_enum(K) {
 	Cmd_Kill,
 	Cmd_Set_Value(K),
 	Cmd_Set_Zero(K),
 	Cmd_Remove(K),
+	Cmd_Attach(K),
+	Cmd_Detach(K),
+	Cmd_Kill_Tree(K),
 }
 
 /*
@@ -176,6 +198,39 @@ Asserts:
 cmd_buffer_record_remove :: proc(buffer: ^Cmd_Buffer($K), thing: Thing, kind: K) {
 	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
 	record(buffer, Cmd_Remove(K){thing = thing, kind = kind})
+}
+
+/*
+Records attaching `child` to `parent` in the hierarchy of `kind`.
+
+Asserts:
+- `child` and `parent` are not THING_NIL.
+*/
+cmd_buffer_record_attach :: proc(buffer: ^Cmd_Buffer($K), kind: K, child, parent: Thing) {
+	assert(child != THING_NIL && parent != THING_NIL, "Cannot record a command for THING_NIL.")
+	record(buffer, Cmd_Attach(K){kind = kind, child = child, parent = parent})
+}
+
+/*
+Records detaching `child` from its parent in the hierarchy of `kind`.
+
+Asserts:
+- `child` is not THING_NIL.
+*/
+cmd_buffer_record_detach :: proc(buffer: ^Cmd_Buffer($K), kind: K, child: Thing) {
+	assert(child != THING_NIL, "Cannot record a command for THING_NIL.")
+	record(buffer, Cmd_Detach(K){kind = kind, child = child})
+}
+
+/*
+Records killing the thing and all its descendants in the hierarchy of `kind`.
+
+Asserts:
+- `thing` is not THING_NIL.
+*/
+cmd_buffer_record_kill_tree :: proc(buffer: ^Cmd_Buffer($K), kind: K, thing: Thing) {
+	assert(thing != THING_NIL, "Cannot record a command for THING_NIL.")
+	record(buffer, Cmd_Kill_Tree(K){kind = kind, thing = thing})
 }
 
 /*
