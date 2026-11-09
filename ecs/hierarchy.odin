@@ -334,7 +334,7 @@ Advances the iterator. Changing the links while iterating is not supported.
 
 Returns the next child and true, or false once every child was returned.
 */
-hierarchy_children_iter :: proc(it: ^Hierarchy_Children_Iter) -> (Thing, bool) {
+hierarchy_children_iter :: #force_inline proc(it: ^Hierarchy_Children_Iter) -> (Thing, bool) {
 	if it.next == THING_NIL do return THING_NIL, false
 
 	thing := it.next
@@ -629,7 +629,7 @@ hierarchy_node_self :: proc(set: ^Hierarchy_Set, idx: Thing_Idx) -> Thing {
 }
 
 @(private = "file")
-hierarchy_node_next_sibling :: proc(set: ^Hierarchy_Set, idx: Thing_Idx) -> Thing {
+hierarchy_node_next_sibling :: #force_inline proc(set: ^Hierarchy_Set, idx: Thing_Idx) -> Thing {
 	node := set.nodes[idx]
 	if node.next_sibling == THING_NIL do return THING_NIL
 	if node.next_sibling == set.nodes[node.parent.idx].first_child do return THING_NIL
