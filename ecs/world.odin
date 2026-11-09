@@ -201,12 +201,25 @@ world_has :: proc(world: ^World($K, $S), thing: Thing, kind: K) -> bool {
 }
 
 /* See get_part. */
-world_get_part :: proc(world: ^World($K, $S), thing: Thing, kind: K, $T: typeid) -> ^T {
+world_get_part :: proc(world: ^World($K, $S), thing: Thing, kind: K, $T: typeid) -> (T, bool) {
+	part := part_pool_get(&world.part_pool, thing, kind, T)
+	if part == nil do return {}, false
+
+	return part^, true
+}
+
+/* See write_part. */
+world_write_part :: proc(world: ^World($K, $S), thing: Thing, kind: K, $T: typeid) -> ^T {
 	return part_pool_get(&world.part_pool, thing, kind, T)
 }
 
 /* See get_parts. */
 world_get_parts :: proc(world: ^World($K, $S), kind: K, $T: typeid) -> []T {
+	return part_pool_get_parts(&world.part_pool, kind, T)
+}
+
+/* See write_parts. */
+world_write_parts :: proc(world: ^World($K, $S), kind: K, $T: typeid) -> []T {
 	return part_pool_get_parts(&world.part_pool, kind, T)
 }
 
@@ -286,7 +299,12 @@ world_is_stash_registered :: proc(world: ^World($K, $S), kind: K) -> bool {
 }
 
 /* See get_stash. */
-world_get_stash :: proc(world: ^World($K, $S), kind: K, $T: typeid) -> ^T {
+world_get_stash :: proc(world: ^World($K, $S), kind: K, $T: typeid) -> T {
+	return stash_pool_get(&world.stash_pool, kind, T)^
+}
+
+/* See write_stash. */
+world_write_stash :: proc(world: ^World($K, $S), kind: K, $T: typeid) -> ^T {
 	return stash_pool_get(&world.stash_pool, kind, T)
 }
 
@@ -557,22 +575,24 @@ world_apply_buffer :: proc(world: ^World($K, $S), buffer: ^Cmd_Buffer(K)) {
 // >-------------------------------------------------------------- World Systems
 
 /*
-Schedules a system into a stage, with the kinds it reads and writes. Part, stash and hierarchy
+Schedules a system into a stage under `name`, with the kinds it reads and writes. Part, stash and hierarchy
 kinds all count. Systems whose kinds conflict run in schedule order, nothing checks that a system
 only touches what it declared.
 
 Asserts:
 - `system` is not nil.
+- `name` is not empty.
 - the stage has fewer systems than `system_capacity`.
 */
 world_schedule :: proc(
 	world: ^World($K, $S),
 	system: proc(stuff: Stuff(K, S)),
+	name: string,
 	stage: S,
 	reads: bit_set[K],
 	writes: bit_set[K],
 ) {
-	system_pool_schedule(&world.system_pool, system, stage, reads, writes)
+	system_pool_schedule(&world.system_pool, system, name, stage, reads, writes)
 }
 
 /* Counts the systems scheduled in every stage. */

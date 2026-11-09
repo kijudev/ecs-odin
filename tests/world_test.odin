@@ -54,7 +54,7 @@ static_allocator_is_only_used_in_setup_and_destroy :: proc(t: ^testing.T) {
 	ecs.world_register_part(&world, .Velocity, Velocity)
 	ecs.world_register_stash(&world, .Time, Time)
 	ecs.world_register_hierarchy(&world, .Transform)
-	ecs.world_schedule(&world, system_a, .Update, {}, {.Position})
+	ecs.world_schedule(&world, system_a, "system_a", .Update, {}, {.Position})
 
 	static_allocated := static_track.total_memory_allocated
 	static_frees := static_track.total_free_count
@@ -153,12 +153,9 @@ set_now_and_get_part :: proc(t: ^testing.T) {
 
 	testing.expect(t, ecs.world_has(&world, thing, .Position))
 	testing.expect(t, !ecs.world_has(&world, thing, .Velocity))
-	testing.expect_value(
-		t,
-		ecs.world_get_part(&world, thing, .Position, Position)^,
-		Position{1, 2},
-	)
-	testing.expect(t, ecs.world_get_part(&world, thing, .Velocity, Velocity) == nil)
+	expect_part(t, &world, thing, .Position, Position{1, 2})
+	_, has_velocity := ecs.world_get_part(&world, thing, .Velocity, Velocity)
+	testing.expect(t, !has_velocity)
 }
 
 @(test)
@@ -196,11 +193,7 @@ set_now_existing_overwrites :: proc(t: ^testing.T) {
 	ecs.set_now(&world, thing, .Position, Position{3, 4})
 
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
-	testing.expect_value(
-		t,
-		ecs.world_get_part(&world, thing, .Position, Position)^,
-		Position{3, 4},
-	)
+	expect_part(t, &world, thing, .Position, Position{3, 4})
 }
 
 @(test)
@@ -213,12 +206,8 @@ kinds_can_share_a_type :: proc(t: ^testing.T) {
 	ecs.set_now(&world, thing, .Position, Position{1, 2})
 	ecs.set_now(&world, thing, .Target, Position{5, 6})
 
-	testing.expect_value(
-		t,
-		ecs.world_get_part(&world, thing, .Position, Position)^,
-		Position{1, 2},
-	)
-	testing.expect_value(t, ecs.world_get_part(&world, thing, .Target, Position)^, Position{5, 6})
+	expect_part(t, &world, thing, .Position, Position{1, 2})
+	expect_part(t, &world, thing, .Target, Position{5, 6})
 
 	ecs.world_remove_now(&world, thing, .Target)
 	testing.expect(t, ecs.world_has(&world, thing, .Position))
@@ -264,7 +253,7 @@ kill_now_removes_all_parts :: proc(t: ^testing.T) {
 	testing.expect_value(t, destroyed_count, 1)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Velocity), 0)
-	testing.expect_value(t, ecs.world_get_part(&world, b, .Position, Position)^, Position{2, 2})
+	expect_part(t, &world, b, .Position, Position{2, 2})
 
 	// Reused idx starts with no parts.
 	c := ecs.world_spawn(&world)
@@ -323,7 +312,7 @@ add_now_inserts_zeroed_part :: proc(t: ^testing.T) {
 
 	ecs.set_now(&world, thing, .Position, Position{1, 2})
 	testing.expect(t, ecs.world_add_now(&world, thing, .Position))
-	testing.expect_value(t, ecs.world_get_part(&world, thing, .Position, Position)^, Position{})
+	expect_part(t, &world, thing, .Position, Position{})
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
 
 	// Killing removes added parts like any other.
@@ -352,7 +341,7 @@ get_parts_and_things_match_up :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(parts), 3)
 	testing.expect_value(t, len(things), 3)
 	for thing, i in things {
-		testing.expect_value(t, ecs.world_get_part(&world, thing, .Position, Position)^, parts[i])
+		expect_part(t, &world, thing, .Position, parts[i])
 	}
 }
 
@@ -388,11 +377,7 @@ later_waits_for_apply :: proc(t: ^testing.T) {
 	ecs.world_apply(&world)
 
 	testing.expect_value(t, ecs.world_count_cmds(&world), 0)
-	testing.expect_value(
-		t,
-		ecs.world_get_part(&world, thing, .Position, Position)^,
-		Position{1, 2},
-	)
+	expect_part(t, &world, thing, .Position, Position{1, 2})
 	testing.expect(t, ecs.world_has(&world, thing, .Tag))
 }
 
@@ -418,10 +403,10 @@ set_later_overloads :: proc(t: ^testing.T) {
 
 	ecs.world_apply(&world)
 
-	testing.expect_value(t, ecs.world_get_part(&world, a, .Position, Position)^, Position{1, 2})
-	testing.expect_value(t, ecs.world_get_part(&world, b, .Position, Position)^, Position{3, 4})
-	testing.expect_value(t, ecs.world_get_part(&world, c, .Position, Position)^, Position{})
-	testing.expect_value(t, ecs.world_get_part(&world, d, .Position, Position)^, Position{})
+	expect_part(t, &world, a, .Position, Position{1, 2})
+	expect_part(t, &world, b, .Position, Position{3, 4})
+	expect_part(t, &world, c, .Position, Position{})
+	expect_part(t, &world, d, .Position, Position{})
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 4)
 }
 
@@ -439,11 +424,7 @@ set_later_overwrites_existing :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, destroyed_count, 1)
 	testing.expect_value(t, ecs.world_count_parts(&world, .Velocity), 1)
-	testing.expect_value(
-		t,
-		ecs.world_get_part(&world, thing, .Velocity, Velocity)^,
-		Velocity{3, 4},
-	)
+	expect_part(t, &world, thing, .Velocity, Velocity{3, 4})
 }
 
 @(test)
@@ -526,7 +507,7 @@ apply_keeps_record_order :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.world_is_alive(&world, a))
 	testing.expect(t, !ecs.world_is_alive(&world, b))
 	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
-	testing.expect_value(t, ecs.world_get_part(&world, c, .Position, Position)^, Position{7, 8})
+	expect_part(t, &world, c, .Position, Position{7, 8})
 }
 
 @(test)
@@ -604,8 +585,8 @@ apply_buffer_applies_and_keeps_buffer :: proc(t: ^testing.T) {
 
 	ecs.world_apply_buffer(&world, &buffer)
 
-	testing.expect_value(t, ecs.world_get_part(&world, a, .Position, Position)^, Position{1, 2})
-	testing.expect_value(t, ecs.world_get_part(&world, a, .Velocity, Velocity)^, Velocity{})
+	expect_part(t, &world, a, .Position, Position{1, 2})
+	expect_part(t, &world, a, .Velocity, Velocity{})
 	testing.expect(t, !ecs.world_has(&world, b, .Tag))
 	testing.expect_value(t, len(buffer.cmds), 3)
 	testing.expect_value(t, ecs.world_count_cmds(&world), 0)
@@ -632,16 +613,8 @@ apply_buffer_replays_into_many_worlds :: proc(t: ^testing.T) {
 	ecs.world_apply_buffer(&first, &buffer)
 	ecs.world_apply_buffer(&second, &buffer)
 
-	testing.expect_value(
-		t,
-		ecs.world_get_part(&first, thing, .Position, Position)^,
-		Position{1, 2},
-	)
-	testing.expect_value(
-		t,
-		ecs.world_get_part(&second, thing, .Position, Position)^,
-		Position{1, 2},
-	)
+	expect_part(t, &first, thing, .Position, Position{1, 2})
+	expect_part(t, &second, thing, .Position, Position{1, 2})
 }
 
 @(test)
@@ -676,11 +649,10 @@ register_stash_and_get :: proc(t: ^testing.T) {
 	ecs.world_register_stash(&world, .Time, Time)
 	testing.expect(t, ecs.world_is_stash_registered(&world, .Time))
 
-	time := ecs.world_get_stash(&world, .Time, Time)
-	testing.expect_value(t, time^, Time{})
+	testing.expect_value(t, ecs.world_get_stash(&world, .Time, Time), Time{})
 
-	time.delta = 0.5
-	testing.expect_value(t, ecs.world_get_stash(&world, .Time, Time)^, Time{0.5, 0})
+	ecs.world_write_stash(&world, .Time, Time).delta = 0.5
+	testing.expect_value(t, ecs.world_get_stash(&world, .Time, Time), Time{0.5, 0})
 }
 
 @(test)
@@ -691,8 +663,8 @@ reset_zeroes_stashes_keeps_registrations :: proc(t: ^testing.T) {
 
 	ecs.world_register_stash(&world, .Time, Time, count_destroyed_time)
 	ecs.world_register_stash(&world, .Gravity, f32)
-	ecs.world_get_stash(&world, .Time, Time)^ = {1, 2}
-	ecs.world_get_stash(&world, .Gravity, f32)^ = 9.81
+	ecs.world_write_stash(&world, .Time, Time)^ = {1, 2}
+	ecs.world_write_stash(&world, .Gravity, f32)^ = 9.81
 
 	destroyed_stashes = {}
 	ecs.world_reset(&world)
@@ -700,8 +672,8 @@ reset_zeroes_stashes_keeps_registrations :: proc(t: ^testing.T) {
 	testing.expect_value(t, destroyed_stashes[.Time], 1)
 	testing.expect(t, ecs.world_is_stash_registered(&world, .Time))
 	testing.expect(t, ecs.world_is_stash_registered(&world, .Gravity))
-	testing.expect_value(t, ecs.world_get_stash(&world, .Time, Time)^, Time{})
-	testing.expect_value(t, ecs.world_get_stash(&world, .Gravity, f32)^, 0)
+	testing.expect_value(t, ecs.world_get_stash(&world, .Time, Time), Time{})
+	testing.expect_value(t, ecs.world_get_stash(&world, .Gravity, f32), 0)
 }
 
 @(test)
@@ -740,9 +712,9 @@ run_goes_through_stages_in_order :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	// Scheduled out of stage order on purpose.
-	ecs.world_schedule(&world, system_c, .Render, {}, {})
-	ecs.world_schedule(&world, system_a, .Update, {}, {.Position})
-	ecs.world_schedule(&world, system_b, .Update, {.Position}, {})
+	ecs.world_schedule(&world, system_c, "system_c", .Render, {}, {})
+	ecs.world_schedule(&world, system_a, "system_a", .Update, {}, {.Position})
+	ecs.world_schedule(&world, system_b, "system_b", .Update, {.Position}, {})
 	testing.expect_value(t, ecs.world_count_systems(&world), 3)
 
 	clear(&system_log)
@@ -761,8 +733,8 @@ run_orders_systems_on_stashes :: proc(t: ^testing.T) {
 	ecs.world_register_stash(&world, .Time, Time)
 
 	// Without a conflict b would run first, the stash kind is the only thing ordering them.
-	ecs.world_schedule(&world, system_a, .Update, {}, {.Time})
-	ecs.world_schedule(&world, system_b, .Update, {.Time}, {})
+	ecs.world_schedule(&world, system_a, "system_a", .Update, {}, {.Time})
+	ecs.world_schedule(&world, system_b, "system_b", .Update, {.Time}, {})
 
 	clear(&system_log)
 	ecs.world_run_stage_sync(&world, .Update)
@@ -777,8 +749,8 @@ run_stage_runs_only_that_stage :: proc(t: ^testing.T) {
 	make_world(&world)
 	defer ecs.world_destroy(&world)
 
-	ecs.world_schedule(&world, system_a, .Update, {}, {})
-	ecs.world_schedule(&world, system_b, .Render, {}, {})
+	ecs.world_schedule(&world, system_a, "system_a", .Update, {}, {})
+	ecs.world_schedule(&world, system_b, "system_b", .Render, {}, {})
 
 	clear(&system_log)
 	ecs.world_run_stage_sync(&world, .Render)
@@ -794,9 +766,9 @@ run_leaves_cmds_for_apply :: proc(t: ^testing.T) {
 	defer ecs.world_destroy(&world)
 
 	system_target = ecs.world_spawn(&world)
-	ecs.world_schedule(&world, tag_later_system, .Update, {}, {.Tag})
-	ecs.world_schedule(&world, check_tag_system, .Update, {.Tag}, {})
-	ecs.world_schedule(&world, check_tag_system, .Render, {.Tag}, {})
+	ecs.world_schedule(&world, tag_later_system, "tag_later_system", .Update, {}, {.Tag})
+	ecs.world_schedule(&world, check_tag_system, "check_tag_system", .Update, {.Tag}, {})
+	ecs.world_schedule(&world, check_tag_system, "check_tag_system", .Render, {.Tag}, {})
 
 	clear(&system_log)
 	ecs.world_run_sync(&world)
@@ -820,10 +792,10 @@ schedule_after_run_rebuilds_the_graph :: proc(t: ^testing.T) {
 	make_world(&world)
 	defer ecs.world_destroy(&world)
 
-	ecs.world_schedule(&world, system_a, .Update, {}, {.Position})
+	ecs.world_schedule(&world, system_a, "system_a", .Update, {}, {.Position})
 	ecs.world_run_sync(&world)
 
-	ecs.world_schedule(&world, system_b, .Update, {.Position}, {})
+	ecs.world_schedule(&world, system_b, "system_b", .Update, {.Position}, {})
 	clear(&system_log)
 	ecs.world_run_sync(&world)
 
@@ -837,7 +809,7 @@ reset_keeps_scheduled_systems :: proc(t: ^testing.T) {
 	make_world(&world)
 	defer ecs.world_destroy(&world)
 
-	ecs.world_schedule(&world, system_a, .Update, {}, {})
+	ecs.world_schedule(&world, system_a, "system_a", .Update, {}, {})
 	ecs.world_reset(&world)
 	testing.expect_value(t, ecs.world_count_systems(&world), 1)
 
@@ -1281,8 +1253,22 @@ run_orders_systems_on_hierarchies :: proc(t: ^testing.T) {
 	hierarchy_things[1] = ecs.spawn(&world)
 
 	// Without a conflict b would run first, the hierarchy kind is the only thing ordering them.
-	ecs.world_schedule(&world, hierarchy_order_system_a, .Update, {}, {.Transform})
-	ecs.world_schedule(&world, hierarchy_order_system_b, .Update, {.Transform}, {})
+	ecs.world_schedule(
+		&world,
+		hierarchy_order_system_a,
+		"hierarchy_order_system_a",
+		.Update,
+		{},
+		{.Transform},
+	)
+	ecs.world_schedule(
+		&world,
+		hierarchy_order_system_b,
+		"hierarchy_order_system_b",
+		.Update,
+		{.Transform},
+		{},
+	)
 
 	clear(&system_log)
 	ecs.world_run_stage_sync(&world, .Update)
@@ -1338,7 +1324,7 @@ systems_reach_the_hierarchy_through_stuff :: proc(t: ^testing.T) {
 	ecs.attach_now(&world, .Transform, c, b)
 	ecs.world_rebuild_hierarchy(&world, .Transform)
 
-	ecs.world_schedule(&world, hierarchy_system, .Update, {}, {})
+	ecs.world_schedule(&world, hierarchy_system, "hierarchy_system", .Update, {}, {.Transform})
 	clear(&system_log)
 	ecs.world_run_sync(&world)
 

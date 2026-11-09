@@ -30,8 +30,11 @@ Asserts:
 - `include` is not empty.
 - no kind is in both `include` and `exclude`.
 - every kind of `include` is a registered part.
+- the system declared every kind of `include` and `exclude` in its reads or writes.
 */
 query_make :: proc(stuff: Stuff($K, $S), include: bit_set[K], exclude: bit_set[K]) -> Query(K, S) {
+	for kind in include | exclude do stuff_assert_reads(stuff, kind)
+
 	query := Query(K, S) {
 		stuff   = stuff,
 		include = archetype_make(include),
@@ -58,6 +61,7 @@ Asserts:
 - `include` is not empty.
 - no kind is in both `include` and `exclude`.
 - every kind of `include` is a registered part.
+- the system declared `kind` and every kind of `include` and `exclude` in its reads or writes.
 */
 query_make_hierarchy :: proc(
 	stuff: Stuff($K, $S),
@@ -66,6 +70,7 @@ query_make_hierarchy :: proc(
 	exclude: bit_set[K],
 ) -> Query(K, S) {
 	hierarchy_pool_assert_registered(&stuff.world.hierarchy_pool, kind)
+	stuff_assert_reads(stuff, kind)
 
 	query := query_make(stuff, include, exclude)
 	query.hierarchy = kind
@@ -124,21 +129,19 @@ query_iter :: proc(query: ^Query($K, $S)) -> (Thing, bool) {
 
 /* See has. */
 query_has :: proc(query: ^Query($K, $S), kind: K) -> bool {
-	return world_has(query.stuff.world, query.thing, kind)
+	return stuff_has(query.stuff, query.thing, kind)
 }
 
 /* See get_part. */
-query_get_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
-	fmt.assertf(query.thing != {}, "Query has no current thing to get part %v from.", kind)
+query_get_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> T {
+	stuff_assert_reads(query.stuff, kind)
+	return current_part(query, kind, T)^
+}
 
-	fmt.assertf(
-		query_has(query, kind),
-		"Query does not have part %v for thing %v.",
-		kind,
-		query.thing,
-	)
-
-	return part_pool_get_unchecked(&query.stuff.world.part_pool, query.thing, kind, T)
+/* See write_part. */
+query_write_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
+	stuff_assert_writes(query.stuff, kind)
+	return current_part(query, kind, T)
 }
 
 /* See get_thing. */
@@ -157,16 +160,17 @@ Gets the part of the current thing's parent in the query's hierarchy. Meant for 
 values down a tree: the parent was visited before the current thing, unless the thing moved to a
 new parent since the last rebuild. Rebuild before the pass to rule that out.
 
-Returns nil if the current thing is a root or its parent doesn't have the part. The pointer is
-valid until a part of this kind is added to or removed from any thing.
+Returns a copy of the part and true, or false if the current thing is a root or its parent
+doesn't have the part.
 
 Asserts:
 - the query is a hierarchy query and has a current thing.
 - `kind` is a registered part.
 - `T` is the type `kind` was registered with.
+- the system declared `kind` in its reads or writes.
 */
-query_get_parent_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
-	return world_get_part(query.stuff.world, query_get_parent(query), kind, T)
+query_get_parent_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> (T, bool) {
+	return stuff_get_part(query.stuff, query_get_parent(query), kind, T)
 }
 
 /*
@@ -198,6 +202,19 @@ query_skip_subtree :: proc(query: ^Query($K, $S)) {
 }
 
 // >------------------------------------------------------------------ Internals
+
+@(private = "file")
+current_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
+	fmt.assertf(query.thing != {}, "Query has no current thing to get part %v from.", kind)
+	fmt.assertf(
+		world_has(query.stuff.world, query.thing, kind),
+		"Query does not have part %v for thing %v.",
+		kind,
+		query.thing,
+	)
+
+	return part_pool_get_unchecked(&query.stuff.world.part_pool, query.thing, kind, T)
+}
 
 @(private = "file")
 assert_hierarchy_thing :: proc(query: ^Query($K, $S), loc := #caller_location) {

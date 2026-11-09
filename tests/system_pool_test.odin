@@ -18,19 +18,19 @@ system_graph_edge :: proc(graph: ^ecs.System_Graph, from, to: int) -> bool {
 @(test)
 system_info_conflicts_on_shared_writes :: proc(t: ^testing.T) {
 	reader_pos := System {
-		reads = {.Position},
+		access = {reads = {.Position}},
 	}
 	reader_pos_2 := System {
-		reads = {.Position},
+		access = {reads = {.Position}},
 	}
 	writer_pos := System {
-		writes = {.Position},
+		access = {writes = {.Position}},
 	}
 	writer_pos_2 := System {
-		writes = {.Position},
+		access = {writes = {.Position}},
 	}
 	writer_vel := System {
-		writes = {.Velocity},
+		access = {writes = {.Velocity}},
 	}
 
 	testing.expect(t, !ecs.system_info_conflicts(&reader_pos, &reader_pos_2), "read/read")
@@ -64,7 +64,7 @@ system_pool_destroy_frees_with_init_allocator :: proc(t: ^testing.T) {
 
 	pool: System_Pool
 	ecs.system_pool_init(&pool, CAPACITY, mem.tracking_allocator(&track))
-	ecs.system_pool_schedule(&pool, system_a, .Update, {.Velocity}, {.Position})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {.Velocity}, {.Position})
 	testing.expect(t, len(track.allocation_map) > 0)
 
 	// Destroy runs under the default context.allocator, not the init one.
@@ -79,8 +79,8 @@ system_pool_reset_removes_systems :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
-	ecs.system_pool_schedule(&pool, system_b, .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {}, {.Position})
 	ecs.system_pool_build_graphs(&pool)
 	ecs.system_pool_reset(&pool)
 
@@ -100,11 +100,11 @@ system_pool_usable_after_reset :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
 	ecs.system_pool_build_graphs(&pool)
 	ecs.system_pool_reset(&pool)
 
-	ecs.system_pool_schedule(&pool, system_b, .Update, {}, {})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {}, {})
 	ecs.system_pool_build_graphs(&pool)
 
 	clear(&system_log)
@@ -122,7 +122,7 @@ system_pool_schedule_stores_the_system :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {.Velocity}, {.Position})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {.Velocity}, {.Position})
 
 	systems := ecs.system_pool_get_systems(&pool, .Update)
 	testing.expect_value(t, len(systems), 1)
@@ -138,9 +138,9 @@ system_pool_schedule_groups_by_stage_in_order :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Render, {}, {})
-	ecs.system_pool_schedule(&pool, system_b, .Update, {}, {})
-	ecs.system_pool_schedule(&pool, system_c, .Render, {}, {})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Render, {}, {})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {}, {})
+	ecs.system_pool_schedule(&pool, system_c, "system_c", .Render, {}, {})
 
 	testing.expect_value(t, ecs.system_pool_count_systems(&pool), 3)
 
@@ -160,9 +160,9 @@ system_pool_fills_a_stage_exactly :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	for _ in 0 ..< CAPACITY do ecs.system_pool_schedule(&pool, system_a, .Update, {}, {})
+	for _ in 0 ..< CAPACITY do ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {})
 	// The limit is per stage, other stages still have room.
-	ecs.system_pool_schedule(&pool, system_b, .Render, {}, {})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Render, {}, {})
 
 	testing.expect_value(t, ecs.system_pool_count_systems(&pool), CAPACITY + 1)
 }
@@ -175,8 +175,8 @@ system_graph_independent_systems_have_no_edges :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {.Velocity}, {.Position})
-	ecs.system_pool_schedule(&pool, system_b, .Update, {.Velocity}, {.Health})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {.Velocity}, {.Position})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {.Velocity}, {.Health})
 	ecs.system_pool_build_graphs(&pool)
 
 	graph := &pool.graphs[.Update]
@@ -192,8 +192,8 @@ system_graph_conflict_points_from_earlier_to_later :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
-	ecs.system_pool_schedule(&pool, system_b, .Update, {.Position}, {})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {.Position}, {})
 	ecs.system_pool_build_graphs(&pool)
 
 	graph := &pool.graphs[.Update]
@@ -210,8 +210,8 @@ system_graph_only_links_systems_within_a_stage :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
-	ecs.system_pool_schedule(&pool, system_b, .Render, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Render, {}, {.Position})
 	ecs.system_pool_build_graphs(&pool)
 
 	testing.expect_value(t, pool.graphs[.Update].dependency_count[0], 0)
@@ -224,8 +224,8 @@ system_graph_rebuild_drops_old_edges :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
-	ecs.system_pool_schedule(&pool, system_b, .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {}, {.Position})
 	ecs.system_pool_build_graphs(&pool)
 	ecs.system_pool_build_graphs(&pool)
 
@@ -241,10 +241,10 @@ system_pool_run_stage_sync_runs_each_system_once :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
-	ecs.system_pool_schedule(&pool, system_b, .Update, {}, {.Velocity})
-	ecs.system_pool_schedule(&pool, system_c, .Update, {.Position}, {})
-	ecs.system_pool_schedule(&pool, system_d, .Render, {}, {})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {}, {.Velocity})
+	ecs.system_pool_schedule(&pool, system_c, "system_c", .Update, {.Position}, {})
+	ecs.system_pool_schedule(&pool, system_d, "system_d", .Render, {}, {})
 	ecs.system_pool_build_graphs(&pool)
 
 	clear(&system_log)
@@ -263,10 +263,10 @@ system_pool_run_stage_sync_respects_conflicts :: proc(t: ^testing.T) {
 	defer ecs.system_pool_destroy(&pool)
 
 	// a -> b -> c is a chain, d is independent.
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
-	ecs.system_pool_schedule(&pool, system_b, .Update, {.Position}, {.Velocity})
-	ecs.system_pool_schedule(&pool, system_c, .Update, {.Velocity}, {})
-	ecs.system_pool_schedule(&pool, system_d, .Update, {.Health}, {})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {.Position}, {.Velocity})
+	ecs.system_pool_schedule(&pool, system_c, "system_c", .Update, {.Velocity}, {})
+	ecs.system_pool_schedule(&pool, system_d, "system_d", .Update, {.Health}, {})
 	ecs.system_pool_build_graphs(&pool)
 
 	clear(&system_log)
@@ -284,8 +284,8 @@ system_pool_run_stage_sync_can_run_again :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY)
 	defer ecs.system_pool_destroy(&pool)
 
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
-	ecs.system_pool_schedule(&pool, system_b, .Update, {.Position}, {})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {.Position}, {})
 	ecs.system_pool_build_graphs(&pool)
 
 	clear(&system_log)
@@ -324,10 +324,10 @@ system_pool_schedule_panics_when_stage_full :: proc(t: ^testing.T) {
 
 	pool: System_Pool
 	ecs.system_pool_init(&pool, CAPACITY, mem.arena_allocator(&arena))
-	for _ in 0 ..< CAPACITY do ecs.system_pool_schedule(&pool, system_a, .Update, {}, {})
+	for _ in 0 ..< CAPACITY do ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {})
 
 	testing.expect_assert_message(t, "Cannot schedule more than 8 systems in stage Update.")
-	ecs.system_pool_schedule(&pool, system_b, .Update, {}, {})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {}, {})
 	testing.fail_now(t, "The call did not panic.")
 }
 
@@ -355,7 +355,24 @@ system_pool_schedule_nil_asserts :: proc(t: ^testing.T) {
 	ecs.system_pool_init(&pool, CAPACITY, mem.arena_allocator(&arena))
 
 	testing.expect_assert_message(t, "Cannot schedule a nil system.")
-	ecs.system_pool_schedule(&pool, nil, .Update, {}, {})
+	ecs.system_pool_schedule(&pool, nil, "nil", .Update, {}, {})
+	testing.fail_now(t, "The call did not assert.")
+}
+
+@(test)
+system_pool_schedule_without_name_asserts :: proc(t: ^testing.T) {
+	// Nothing to check when asserts are compiled out.
+	when ODIN_DISABLE_ASSERT do return
+
+	@(static) backing: [512 * mem.Kilobyte]byte
+	arena: mem.Arena
+	mem.arena_init(&arena, backing[:])
+
+	pool: System_Pool
+	ecs.system_pool_init(&pool, CAPACITY, mem.arena_allocator(&arena))
+
+	testing.expect_assert_message(t, "Cannot schedule a system without a name.")
+	ecs.system_pool_schedule(&pool, system_a, "", .Update, {}, {})
 	testing.fail_now(t, "The call did not assert.")
 }
 
@@ -370,9 +387,9 @@ system_pool_run_stage_sync_asserts_on_stale_graph :: proc(t: ^testing.T) {
 
 	pool: System_Pool
 	ecs.system_pool_init(&pool, CAPACITY, mem.arena_allocator(&arena))
-	ecs.system_pool_schedule(&pool, system_a, .Update, {}, {.Position})
+	ecs.system_pool_schedule(&pool, system_a, "system_a", .Update, {}, {.Position})
 	ecs.system_pool_build_graphs(&pool)
-	ecs.system_pool_schedule(&pool, system_b, .Update, {.Position}, {})
+	ecs.system_pool_schedule(&pool, system_b, "system_b", .Update, {.Position}, {})
 
 	stuff: Stuff
 	testing.expect_assert_message(

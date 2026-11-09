@@ -62,7 +62,7 @@ size and alignment (from `^runtime.Type_Info`) and an optional `destroy` callbac
 Lookups take a full `Thing` and compare it with the dense owner, so a stale thing never sees the part
 of a reused idx. Inserting for a thing that already has the part overwrites it (`destroy` runs
 on the old value). Inserting with a nil part zero-initialises it. Zero-sized parts (tags) store no data;
-`get_part` returns a shared non-nil pointer for them.
+`part_set_get` returns a shared non-nil pointer for them.
 
 The `_unchecked` variants skip validation: `get_part`/`remove` assume the part exists, `insert` assumes it
 does not.
@@ -216,6 +216,39 @@ A hierarchy kind goes into `reads` and `writes` like a part or stash kind. Only 
 `iter_children`, ...) read it in a way that can conflict. `_later` calls only touch the command
 buffer, and the order only changes at a rebuild, which runs outside systems. Note that `kill_now`
 writes every hierarchy and every part kind of the thing without declaring it.
+
+# System Access
+
+Every system is scheduled with a name and the kinds it `reads` and `writes`. The declaration does
+two things: it orders conflicting systems, and it is checked while the system runs.
+
+The declaration is an `Access`: a name plus the `reads` and `writes` sets. `System_Info` embeds
+it, and the `Stuff` a system gets carries a copy, so `Stuff` knows nothing about systems.
+`stuff_make_restricted(world, access)` makes such a stuff by hand. Every proc that touches the
+world right away asserts against it: reads (`has`, `get_part`, `get_parts`, `get_stash`, the
+hierarchy reads, `query_make`) need the kind in `reads` or `writes`, and the `_now` procs and the
+`write_*` getters need it in `writes`. So `writes` implies `reads`. The messages name the system:
+"System move writes Position without declaring it in writes."
+
+The `_later` procs need no declaration. They only record into the command buffer, which is
+applied at a sync point outside the stage, so they can't race with another system. That makes
+`_now` calls barriers and `_later` calls free.
+
+`kill_now` and `kill_tree_now` touch whatever the thing has, so they check that footprint at
+runtime: every part kind of the thing and every hierarchy it is in has to be in `writes`, for
+every thing in the subtree in the tree case.
+
+Reads and writes are separate procs, since Odin has no `const`. `get_part`, `get_stash` and
+`query_get_parent_part` return copies, and `get_part` returns `(T, bool)`. `write_part`,
+`write_parts`, `write_stash` and `query_write_part` return pointers. `get_parts` returns the same
+slice as `write_parts`, so writing through it is only caught by review.
+
+An unrestricted `Stuff`, like the zero value or what `stuff_make` gives, has full access, and the
+`world_*` procs are never checked. The checks compile out with `-disable-assert`.
+
+This is sane validation, not a sandbox: a system can still build an unrestricted `Stuff` or reach
+`stuff.world` directly, and writing through a `get_parts` slice goes unnoticed. The checks catch
+honest mistakes in the declarations, which the scheduler relies on.
 
 # Stuff and Queries
 

@@ -62,6 +62,10 @@ Kills the thing and removes all its parts. It leaves every hierarchy, and its ch
 become roots.
 
 Returns false if the thing is already dead.
+
+Asserts:
+- every part kind of the thing, and every hierarchy it is in, is declared in the system's writes
+  (stuff variant).
 */
 kill_now :: proc {
 	world_kill_now,
@@ -86,6 +90,8 @@ Returns false if the thing is already dead.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- `kind`, and every part kind and hierarchy of every thing in the subtree, is declared in the
+  system's writes (stuff variant).
 */
 kill_tree_now :: proc {
 	world_kill_tree_now,
@@ -144,6 +150,7 @@ Returns false for a dead thing.
 
 Asserts:
 - `kind` is a registered part.
+- the system declared `kind` in its reads or writes (stuff and query variants).
 */
 has :: proc {
 	world_has,
@@ -152,14 +159,15 @@ has :: proc {
 }
 
 /*
-Gets the thing's part. The query variant gets it from the current thing.
+Gets a copy of the thing's part, for reading. The query variant gets it from the current thing.
 
-Returns nil if the thing doesn't have the part; the query variant never does (unchecked).
-The pointer is valid until a part of this kind is added to or removed from any thing.
+Returns the part and true, or false if the thing doesn't have it. The query variant returns just
+the part, the current thing always has it.
 
 Asserts:
 - `kind` is a registered part.
 - `T` is the type `kind` was registered with.
+- the system declared `kind` in its reads or writes (stuff and query variants).
 - the query has a current thing that has the part (query variant only).
 */
 get_part :: proc {
@@ -169,17 +177,52 @@ get_part :: proc {
 }
 
 /*
-Gets every part of this kind, packed, in the same order as `get_things`.
+Gets the thing's part, for writing. The query variant gets it from the current thing.
+
+Returns nil if the thing doesn't have the part; the query variant never does (unchecked).
+The pointer is valid until a part of this kind is added to or removed from any thing.
+
+Asserts:
+- `kind` is a registered part.
+- `T` is the type `kind` was registered with.
+- the system declared `kind` in its writes (stuff and query variants).
+- the query has a current thing that has the part (query variant only).
+*/
+write_part :: proc {
+	world_write_part,
+	stuff_write_part,
+	query_write_part,
+}
+
+/*
+Gets every part of this kind, packed, in the same order as `get_things`, for reading. Odin can't
+make the slice read-only, so writing through it is up to you, use `write_parts` for that.
 
 The slice is valid until a part of this kind is added to or removed from any thing.
 
 Asserts:
 - `kind` is a registered part.
 - `T` is the type `kind` was registered with.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_parts :: proc {
 	world_get_parts,
 	stuff_get_parts,
+}
+
+/*
+Gets every part of this kind, packed, in the same order as `get_things`, for writing.
+
+The slice is valid until a part of this kind is added to or removed from any thing.
+
+Asserts:
+- `kind` is a registered part.
+- `T` is the type `kind` was registered with.
+- the system declared `kind` in its writes (stuff variant).
+*/
+write_parts :: proc {
+	world_write_parts,
+	stuff_write_parts,
 }
 
 /*
@@ -189,6 +232,7 @@ The slice is valid until a part of this kind is added to or removed from any thi
 
 Asserts:
 - `kind` is a registered part.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_things :: proc {
 	world_get_things,
@@ -200,6 +244,7 @@ Counts the things that have this part.
 
 Asserts:
 - `kind` is a registered part.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 count_parts :: proc {
 	world_count_parts,
@@ -217,6 +262,7 @@ this kind is added to or removed from any thing.
 Asserts:
 - `kind` is a registered part.
 - `T` is the type `kind` was registered with.
+- the system declared `kind` in its writes (stuff variant).
 */
 set_now :: proc {
 	world_set_value_now,
@@ -235,6 +281,7 @@ Returns false if the thing is dead.
 
 Asserts:
 - `kind` is a registered part.
+- the system declared `kind` in its writes (stuff variant).
 */
 add_now :: proc {
 	world_add_now,
@@ -248,6 +295,7 @@ Returns false if the thing is dead or doesn't have the part.
 
 Asserts:
 - `kind` is a registered part.
+- the system declared `kind` in its writes (stuff variant).
 */
 remove_now :: proc {
 	world_remove_now,
@@ -310,6 +358,7 @@ Asserts:
 - `kind` is a registered hierarchy.
 - `child` and `parent` are different things.
 - `parent` isn't a descendant of `child`.
+- the system declared `kind` in its writes (stuff variant).
 */
 attach_now :: proc {
 	world_attach_now,
@@ -338,6 +387,7 @@ Returns false if `child` is dead or has no parent.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its writes (stuff variant).
 */
 detach_now :: proc {
 	world_detach_now,
@@ -365,6 +415,7 @@ Returns THING_NIL if the thing is dead, a root or not in the hierarchy.
 Asserts:
 - `kind` is a registered hierarchy.
 - the query is a hierarchy query and has a current thing (query variant only).
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_parent :: proc {
 	world_get_parent,
@@ -379,6 +430,7 @@ Returns THING_NIL if the thing is dead or has no children.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_first_child :: proc {
 	world_get_first_child,
@@ -392,6 +444,7 @@ Returns THING_NIL if the thing is dead, the last sibling or not in the hierarchy
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_next_sibling :: proc {
 	world_get_next_sibling,
@@ -407,6 +460,7 @@ A dead thing has no children.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 iter_children :: proc {
 	world_iter_children,
@@ -418,6 +472,7 @@ Makes an iterator over the roots, see `iter_children`.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 iter_roots :: proc {
 	world_iter_roots,
@@ -432,6 +487,7 @@ Returns false if either thing is dead or wasn't in the hierarchy at the last reb
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 is_ancestor :: proc {
 	world_is_ancestor,
@@ -447,6 +503,7 @@ Things killed since the last rebuild are still in it. The slice is valid until t
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_hierarchy_order :: proc {
 	world_get_hierarchy_order,
@@ -460,6 +517,7 @@ The slice is valid until the next rebuild.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_hierarchy_depths :: proc {
 	world_get_hierarchy_depths,
@@ -474,6 +532,7 @@ The slice is valid until the next rebuild.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_hierarchy_ends :: proc {
 	world_get_hierarchy_ends,
@@ -488,6 +547,7 @@ valid until the next rebuild.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the system declared `kind` in its reads or writes (stuff variant).
 */
 get_subtree :: proc {
 	world_get_subtree,
@@ -497,15 +557,29 @@ get_subtree :: proc {
 // >-------------------------------------------------------------------- Stashes
 
 /*
-Gets the stash.
+Gets a copy of the stash, for reading.
+
+Asserts:
+- `kind` is a registered stash.
+- `T` is the type `kind` was registered with.
+- the system declared `kind` in its reads or writes (stuff variant).
+*/
+get_stash :: proc {
+	world_get_stash,
+	stuff_get_stash,
+}
+
+/*
+Gets the stash, for writing.
 
 The pointer is never nil and stays valid until the world is destroyed.
 
 Asserts:
 - `kind` is a registered stash.
 - `T` is the type `kind` was registered with.
+- the system declared `kind` in its writes (stuff variant).
 */
-get_stash :: proc {
-	world_get_stash,
-	stuff_get_stash,
+write_stash :: proc {
+	world_write_stash,
+	stuff_write_stash,
 }

@@ -6,13 +6,22 @@ import "core:mem"
 
 // >-------------------------------------------------------- Constants and Types
 
-/* A scheduled system, with the kinds it reads and writes and the stage it runs in. */
-System_Info :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
-	intrinsics.type_is_enum(S) {
-	system: proc(stuff: Stuff(K, S)),
+/*
+The kinds something may read and write, under a name for assert messages. Writing a kind implies
+reading it. Systems declare one when scheduled; it orders them and limits the Stuff they get.
+*/
+Access :: struct($K: typeid) where intrinsics.type_is_enum(K) {
+	name:   string,
 	reads:  bit_set[K],
 	writes: bit_set[K],
-	stage:  S,
+}
+
+/* A scheduled system, with its access and the stage it runs in. */
+System_Info :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
+	intrinsics.type_is_enum(S) {
+	system:       proc(stuff: Stuff(K, S)),
+	using access: Access(K),
+	stage:        S,
 }
 
 /*
@@ -99,22 +108,25 @@ system_pool_reset :: proc(pool: ^System_Pool($K, $S)) {
 }
 
 /*
-Schedules the system in `stage`, declaring the kinds it reads and writes. Of two conflicting
+Schedules the system in `stage` under `name`, declaring the kinds it reads and writes. Of two conflicting
 systems, the one scheduled first runs first. The stage's graph is stale until
 `system_pool_build_graphs`.
 
 Asserts:
 - `system` is not nil.
+- `name` is not empty.
 - the stage has fewer systems than the pool capacity.
 */
 system_pool_schedule :: proc(
 	pool: ^System_Pool($K, $S),
 	system: proc(stuff: Stuff(K, S)),
+	name: string,
 	stage: S,
 	reads: bit_set[K],
 	writes: bit_set[K],
 ) {
 	assert(system != nil, "Cannot schedule a nil system.")
+	assert(name != "", "Cannot schedule a system without a name.")
 	fmt.assertf(
 		pool.counts[stage] < pool.capacity,
 		"Cannot schedule more than %v systems in stage %v.",
@@ -124,9 +136,8 @@ system_pool_schedule :: proc(
 
 	pool.systems[stage][pool.counts[stage]] = System_Info(K, S) {
 		system = system,
-		reads  = reads,
-		writes = writes,
-		stage  = stage,
+		access = Access(K){name = name, reads = reads, writes = writes},
+		stage = stage,
 	}
 	pool.counts[stage] += 1
 }
@@ -159,7 +170,7 @@ system_pool_build_graphs :: proc(pool: ^System_Pool($K, $S)) {
 
 /*
 Runs every system of the stage once on this thread. A system runs only after every earlier
-system it conflicts with.
+system it conflicts with, and gets a stuff for the world of `stuff`, limited to its access.
 
 Returns the number of systems that ran.
 
@@ -193,7 +204,7 @@ system_pool_run_stage_sync :: proc(
 	for ready_count > 0 {
 		ready_count -= 1
 		i := graph.ready[ready_count]
-		systems[i].system(stuff)
+		systems[i].system(stuff_make_restricted(stuff.world, systems[i].access))
 		ran += 1
 
 		for j in i + 1 ..< n do if graph.adj_matrix[i * graph.capacity + j] {

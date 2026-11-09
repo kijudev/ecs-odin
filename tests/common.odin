@@ -1,5 +1,7 @@
 package ecs_tests
 
+import "core:testing"
+
 import ecs "../ecs"
 
 // >---------------------------------------------------------------------- Kinds
@@ -109,3 +111,19 @@ World :: ecs.World(Kind, Stage)
 System_Pool :: ecs.System_Pool(Kind, Stage)
 System :: ecs.System_Info(Kind, Stage)
 Stuff :: ecs.Stuff(Kind, Stage)
+
+// >-------------------------------------------------------------------- Helpers
+
+// Expects the thing to have the part, with the value `want`.
+expect_part :: proc(
+	t: ^testing.T,
+	world: ^World,
+	thing: ecs.Thing,
+	kind: Kind,
+	want: $T,
+	loc := #caller_location,
+) {
+	part, ok := ecs.world_get_part(world, thing, kind, T)
+	testing.expect(t, ok, "The thing doesn't have the part.", loc = loc)
+	testing.expect_value(t, part, want, loc = loc)
+}

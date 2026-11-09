@@ -47,10 +47,16 @@ archetype_insert_remove_clear :: proc(t: ^testing.T) {
 archetype_contains_needs_every_kind :: proc(t: ^testing.T) {
 	a := ecs.archetype_make(bit_set[Kind]{.Position, .Velocity, .Tag})
 
-	testing.expect(t, ecs.archetype_contains(a, ecs.archetype_make(bit_set[Kind]{.Position, .Tag})))
+	testing.expect(
+		t,
+		ecs.archetype_contains(a, ecs.archetype_make(bit_set[Kind]{.Position, .Tag})),
+	)
 	testing.expect(t, ecs.archetype_contains(a, a))
 	testing.expect(t, ecs.archetype_contains(a, Archetype{}))
-	testing.expect(t, !ecs.archetype_contains(a, ecs.archetype_make(bit_set[Kind]{.Position, .Health})))
+	testing.expect(
+		t,
+		!ecs.archetype_contains(a, ecs.archetype_make(bit_set[Kind]{.Position, .Health})),
+	)
 	testing.expect(t, !ecs.archetype_contains(Archetype{}, a))
 }
 
@@ -121,7 +127,10 @@ archetype_pool_get_returns_the_things_kinds :: proc(t: ^testing.T) {
 	ecs.archetype_pool_insert(&pool, thing, .Tag)
 
 	a := ecs.archetype_pool_get(pool, thing)
-	testing.expect(t, ecs.archetype_contains(a, ecs.archetype_make(bit_set[Kind]{.Velocity, .Tag})))
+	testing.expect(
+		t,
+		ecs.archetype_contains(a, ecs.archetype_make(bit_set[Kind]{.Velocity, .Tag})),
+	)
 	testing.expect(t, !ecs.archetype_has(a, .Position))
 
 	ecs.archetype_pool_remove_all(&pool, thing)

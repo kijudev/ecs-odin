@@ -83,17 +83,24 @@ setup :: proc(w: ^World) {
 
 	ecs.register_stash(w, .Time, Time)
 	ecs.register_stash(w, .Gravity, Gravity)
-	ecs.get_stash(w, .Time, Time).delta = 0.5
-	ecs.get_stash(w, .Gravity, Gravity).y = -10
+	ecs.write_stash(w, .Time, Time).delta = 0.5
+	ecs.write_stash(w, .Gravity, Gravity).y = -10
 
-	ecs.world_schedule(w, system_tick, .PreUpdate, {}, {.Time})
+	ecs.world_schedule(w, system_tick, "system_tick", .PreUpdate, {}, {.Time})
 
-	ecs.world_schedule(w, system_fall, .Update, {.Time, .Gravity}, {.Velocity})
-	ecs.world_schedule(w, system_move, .Update, {.Time, .Velocity}, {.Position})
-	ecs.world_schedule(w, system_poison, .Update, {.Poisoned}, {.Health})
+	ecs.world_schedule(w, system_fall, "system_fall", .Update, {.Time, .Gravity}, {.Velocity})
+	ecs.world_schedule(w, system_move, "system_move", .Update, {.Time, .Velocity}, {.Position})
+	ecs.world_schedule(w, system_poison, "system_poison", .Update, {.Poisoned}, {.Health})
 
-	ecs.world_schedule(w, system_reap, .PostUpdate, {.Health}, {})
-	ecs.world_schedule(w, system_report, .PostUpdate, {.Time, .Position, .Health}, {})
+	ecs.world_schedule(w, system_reap, "system_reap", .PostUpdate, {.Health}, {})
+	ecs.world_schedule(
+		w,
+		system_report,
+		"system_report",
+		.PostUpdate,
+		{.Time, .Position, .Health},
+		{},
+	)
 }
 
 seed :: proc(w: ^World) {
@@ -111,7 +118,7 @@ seed :: proc(w: ^World) {
 // >-------------------------------------------------------------------- Systems
 
 system_tick :: proc(stuff: Stuff) {
-	ecs.get_stash(stuff, .Time, Time).frame += 1
+	ecs.write_stash(stuff, .Time, Time).frame += 1
 }
 
 system_fall :: proc(stuff: Stuff) {
@@ -120,7 +127,7 @@ system_fall :: proc(stuff: Stuff) {
 
 	query := ecs.query_make(stuff, {.Velocity}, {})
 	for _ in ecs.query_iter(&query) {
-		vel := ecs.get_part(&query, .Velocity, Velocity)
+		vel := ecs.write_part(&query, .Velocity, Velocity)
 		vel.y += gravity.y * dt
 	}
 }
@@ -130,7 +137,7 @@ system_move :: proc(stuff: Stuff) {
 
 	query := ecs.query_make(stuff, {.Position, .Velocity}, {})
 	for _ in ecs.query_iter(&query) {
-		pos := ecs.get_part(&query, .Position, Position)
+		pos := ecs.write_part(&query, .Position, Position)
 		vel := ecs.get_part(&query, .Velocity, Velocity)
 
 		pos.x += vel.x * dt
@@ -142,7 +149,7 @@ system_poison :: proc(stuff: Stuff) {
 	query := ecs.query_make(stuff, {.Health, .Poisoned}, {})
 
 	for _ in ecs.query_iter(&query) {
-		ecs.get_part(&query, .Health, Health).value -= 1
+		ecs.write_part(&query, .Health, Health).value -= 1
 	}
 }
 

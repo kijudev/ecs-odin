@@ -191,8 +191,9 @@ query_has_and_get_part_read_the_current_thing :: proc(t: ^testing.T) {
 
 	query := ecs.query_make(ecs.stuff_make(&world), {.Position}, {})
 	for thing in ecs.query_iter(&query) {
-		pos := ecs.get_part(&query, .Position, Position)
-		testing.expect(t, pos == ecs.world_get_part(&world, thing, .Position, Position))
+		pos := ecs.write_part(&query, .Position, Position)
+		testing.expect(t, pos == ecs.world_write_part(&world, thing, .Position, Position))
+		testing.expect_value(t, ecs.get_part(&query, .Position, Position), pos^)
 
 		if query.thing == a {
 			testing.expect_value(t, pos^, Position{1, 2})
@@ -304,26 +305,23 @@ hierarchy_query_reads_parent_and_depth :: proc(t: ^testing.T) {
 	for thing in ecs.query_iter(&query) {
 		visited += 1
 		parent := ecs.get_parent(&query)
-		parent_pos := ecs.query_get_parent_part(&query, .Position, Position)
+		parent_pos, has_parent_pos := ecs.query_get_parent_part(&query, .Position, Position)
 
 		switch thing {
 		case a, e:
 			testing.expect_value(t, parent, ecs.THING_NIL)
 			testing.expect_value(t, ecs.query_get_depth(&query), 0)
-			testing.expect(t, parent_pos == nil)
+			testing.expect(t, !has_parent_pos)
 		case c, d:
 			// b is the parent but has no Position.
 			testing.expect_value(t, parent, b)
 			testing.expect_value(t, ecs.query_get_depth(&query), 2)
-			testing.expect(t, parent_pos == nil)
+			testing.expect(t, !has_parent_pos)
 		case f, g:
 			testing.expect_value(t, parent, thing == f ? e : a)
 			testing.expect_value(t, ecs.query_get_depth(&query), 1)
-			testing.expect(t, parent_pos != nil)
-			testing.expect(
-				t,
-				parent_pos == ecs.world_get_part(&world, parent, .Position, Position),
-			)
+			testing.expect(t, has_parent_pos)
+			expect_part(t, &world, parent, .Position, parent_pos)
 		case:
 			testing.fail_now(t, "Visited a thing outside the tree.")
 		}
