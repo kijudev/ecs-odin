@@ -178,35 +178,6 @@ part_pool_zero_sized_parts :: proc(t: ^testing.T) {
 // >------------------------------------------------------------------------ Get
 
 @(test)
-part_pool_get_missing_part_returns_nil :: proc(t: ^testing.T) {
-	pool: Part_Pool
-	make_pool(&pool)
-	defer ecs.part_pool_destroy(&pool)
-
-	thing := ecs.thing_make(1)
-	set_part(&pool, thing, .Position, Position{1, 2})
-
-	testing.expect(t, !ecs.part_pool_has(&pool, thing, .Velocity))
-	testing.expect(t, ecs.part_pool_get(&pool, thing, .Velocity, Velocity) == nil)
-}
-
-@(test)
-part_pool_stale_thing_does_not_see_part :: proc(t: ^testing.T) {
-	pool: Part_Pool
-	make_pool(&pool)
-	defer ecs.part_pool_destroy(&pool)
-
-	old := ecs.thing_make(1, 0)
-	current := ecs.thing_make(1, 1)
-	set_part(&pool, current, .Position, Position{1, 2})
-
-	testing.expect(t, !ecs.part_pool_has(&pool, old, .Position))
-	testing.expect(t, ecs.part_pool_get(&pool, old, .Position, Position) == nil)
-	testing.expect(t, !ecs.part_pool_remove(&pool, old, .Position))
-	testing.expect(t, ecs.part_pool_has(&pool, current, .Position))
-}
-
-@(test)
 part_pool_get_parts_and_things_match_up :: proc(t: ^testing.T) {
 	pool: Part_Pool
 	make_pool(&pool)

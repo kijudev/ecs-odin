@@ -8,7 +8,7 @@ import "core:mem"
 // >-------------------------------------------------------- Constants and Types
 
 Part_Idx :: u32
-Part_Set_Indices :: Inline_Paged_Array(Part_Idx, PART_SET_PAGE_COUNT, PART_SET_PAGE_SIZE)
+Part_Set_Indices :: Paged_Array(Part_Idx, PART_SET_PAGE_COUNT, PART_SET_PAGE_SIZE)
 
 /*
 Stores the parts of one kind as a sparse set: `indices` maps `thing.idx` to a slot in the packed
@@ -71,7 +71,7 @@ part_set_init :: proc(
 		allocator      = allocator,
 	}
 
-	inline_paged_array_init(&set.indices, allocator)
+	paged_array_init(&set.indices, allocator)
 }
 
 /*
@@ -80,7 +80,7 @@ zeroes it.
 */
 part_set_destroy :: proc(set: ^Part_Set) {
 	parts_destroy_all(set)
-	inline_paged_array_destroy(&set.indices)
+	paged_array_destroy(&set.indices)
 
 	delete(set.things, set.allocator)
 	delete(set.parts_data, set.allocator)
@@ -90,7 +90,7 @@ part_set_destroy :: proc(set: ^Part_Set) {
 /* Runs `destroy` on every part and removes them all, keeping the allocated memory. */
 part_set_reset :: proc(set: ^Part_Set) {
 	parts_destroy_all(set)
-	inline_paged_array_reset(&set.indices)
+	paged_array_reset(&set.indices)
 	set.parts_size = 0
 }
 
@@ -142,7 +142,7 @@ Asserts:
 part_set_insert :: proc(set: ^Part_Set, thing: Thing, part: rawptr = nil) -> rawptr {
 	assert(thing != THING_NIL, "Cannot insert a part for THING_NIL.")
 
-	entry := inline_paged_array_get(&set.indices, int(thing.idx))
+	entry := paged_array_get(&set.indices, int(thing.idx))
 	if entry == 0 do return part_set_insert_unchecked(set, thing, part)
 
 	idx := int(entry - 1)
@@ -183,7 +183,7 @@ part_set_insert_unchecked :: proc(set: ^Part_Set, thing: Thing, part: rawptr = n
 	result := parts_append(set, part)
 
 	set.things[idx] = thing
-	inline_paged_array_set(&set.indices, int(thing.idx), Part_Idx(idx + 1))
+	paged_array_set(&set.indices, int(thing.idx), Part_Idx(idx + 1))
 
 	return result
 }
@@ -211,10 +211,10 @@ part_set_remove_unchecked :: proc(set: ^Part_Set, thing: Thing) {
 	if idx != last_idx {
 		moved := set.things[last_idx]
 		set.things[idx] = moved
-		inline_paged_array_set_unchecked(&set.indices, int(moved.idx), Part_Idx(idx + 1))
+		paged_array_set_unchecked(&set.indices, int(moved.idx), Part_Idx(idx + 1))
 	}
 
-	inline_paged_array_set_unchecked(&set.indices, int(thing.idx), 0)
+	paged_array_set_unchecked(&set.indices, int(thing.idx), 0)
 	parts_remove_swap(set, idx)
 }
 
@@ -455,7 +455,7 @@ part_pool_remove_unchecked :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K) 
 
 @(private = "file")
 dense_idx :: proc(set: ^Part_Set, thing: Thing) -> (int, bool) {
-	entry := inline_paged_array_get(&set.indices, int(thing.idx))
+	entry := paged_array_get(&set.indices, int(thing.idx))
 	if entry == 0 do return 0, false
 
 	idx := int(entry - 1)
@@ -464,7 +464,7 @@ dense_idx :: proc(set: ^Part_Set, thing: Thing) -> (int, bool) {
 
 @(private = "file")
 dense_idx_unchecked :: #force_inline proc(set: ^Part_Set, thing: Thing) -> int {
-	return int(inline_paged_array_get_unchecked(&set.indices, int(thing.idx)) - 1)
+	return int(paged_array_get_unchecked(&set.indices, int(thing.idx)) - 1)
 }
 
 @(private = "file")

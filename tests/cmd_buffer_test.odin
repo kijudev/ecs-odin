@@ -19,7 +19,7 @@ record_value :: proc(buffer: ^Cmd_Buffer, thing: ecs.Thing, kind: Kind, part: $T
 // >------------------------------------------------------------------ Lifecycle
 
 @(test)
-cmd_buffer_init_creates_empty_pool :: proc(t: ^testing.T) {
+cmd_buffer_init_creates_empty_buffer :: proc(t: ^testing.T) {
 	buffer: Cmd_Buffer
 	ecs.cmd_buffer_init(&buffer)
 	defer ecs.cmd_buffer_destroy(&buffer)

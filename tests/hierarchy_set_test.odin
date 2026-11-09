@@ -106,7 +106,7 @@ hierarchy_expect_iter :: proc(
 // >------------------------------------------------------------------ Lifecycle
 
 @(test)
-hierarchy_set_init_creates_empty_pool :: proc(t: ^testing.T) {
+hierarchy_set_init_creates_empty_set :: proc(t: ^testing.T) {
 	set: ecs.Hierarchy_Set
 	ecs.hierarchy_set_init(&set, ecs.HIERARCHY_SET_MIN_CAPACITY)
 	defer ecs.hierarchy_set_destroy(&set)
@@ -137,7 +137,7 @@ hierarchy_set_destroy_frees_with_init_allocator :: proc(t: ^testing.T) {
 }
 
 @(test)
-hierarchy_set_reset_empties_pool :: proc(t: ^testing.T) {
+hierarchy_set_reset_empties_set :: proc(t: ^testing.T) {
 	set: ecs.Hierarchy_Set
 	ecs.hierarchy_set_init(&set, ecs.HIERARCHY_SET_MIN_CAPACITY)
 	defer ecs.hierarchy_set_destroy(&set)

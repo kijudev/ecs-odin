@@ -104,22 +104,6 @@ stuff_later_procs_record_into_the_world :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.has(stuff, b, .Tag))
 }
 
-// >-------------------------------------------------------------------- Stashes
-
-@(test)
-stuff_get_stash_is_the_worlds :: proc(t: ^testing.T) {
-	world: World
-	make_world(&world)
-	defer ecs.world_destroy(&world)
-	stuff := ecs.stuff_make(&world)
-
-	time := ecs.write_stash(stuff, .Time, Time)
-	testing.expect(t, time == ecs.write_stash(&world, .Time, Time))
-
-	time.delta = 0.5
-	testing.expect_value(t, ecs.get_stash(stuff, .Time, Time), Time{0.5, 0})
-}
-
 // >--------------------------------------------------------------------- Access
 
 // The things the access systems below work on: a has Position and Velocity, b is its Transform

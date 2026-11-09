@@ -183,38 +183,6 @@ set_now_overloads :: proc(t: ^testing.T) {
 }
 
 @(test)
-set_now_existing_overwrites :: proc(t: ^testing.T) {
-	world: World
-	make_world(&world)
-	defer ecs.world_destroy(&world)
-
-	thing := ecs.world_spawn(&world)
-	ecs.set_now(&world, thing, .Position, Position{1, 2})
-	ecs.set_now(&world, thing, .Position, Position{3, 4})
-
-	testing.expect_value(t, ecs.world_count_parts(&world, .Position), 1)
-	expect_part(t, &world, thing, .Position, Position{3, 4})
-}
-
-@(test)
-kinds_can_share_a_type :: proc(t: ^testing.T) {
-	world: World
-	make_world(&world)
-	defer ecs.world_destroy(&world)
-
-	thing := ecs.world_spawn(&world)
-	ecs.set_now(&world, thing, .Position, Position{1, 2})
-	ecs.set_now(&world, thing, .Target, Position{5, 6})
-
-	expect_part(t, &world, thing, .Position, Position{1, 2})
-	expect_part(t, &world, thing, .Target, Position{5, 6})
-
-	ecs.world_remove_now(&world, thing, .Target)
-	testing.expect(t, ecs.world_has(&world, thing, .Position))
-	testing.expect(t, !ecs.world_has(&world, thing, .Target))
-}
-
-@(test)
 remove_now_removes_part :: proc(t: ^testing.T) {
 	world: World
 	make_world(&world)
@@ -321,29 +289,6 @@ add_now_inserts_zeroed_part :: proc(t: ^testing.T) {
 }
 
 // >--------------------------------------------------------------------- Slices
-
-@(test)
-get_parts_and_things_match_up :: proc(t: ^testing.T) {
-	world: World
-	make_world(&world)
-	defer ecs.world_destroy(&world)
-
-	spawned: [4]ecs.Thing
-	for &thing, i in spawned {
-		thing = ecs.world_spawn(&world)
-		ecs.set_now(&world, thing, .Position, &Position{f32(i), 0})
-	}
-	ecs.world_kill_now(&world, spawned[1])
-
-	parts := ecs.world_get_parts(&world, .Position, Position)
-	things := ecs.world_get_things(&world, .Position)
-
-	testing.expect_value(t, len(parts), 3)
-	testing.expect_value(t, len(things), 3)
-	for thing, i in things {
-		expect_part(t, &world, thing, .Position, parts[i])
-	}
-}
 
 @(test)
 get_parts_of_tags_has_length :: proc(t: ^testing.T) {

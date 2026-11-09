@@ -54,7 +54,7 @@ capacity. See [Handles](#handles) for the pool design.
 `Part_Set` stores one part type as a paged sparse set. It is type-erased: it only knows the part's
 size and alignment (from `^runtime.Type_Info`) and an optional `destroy` callback.
 
-- `indices` - an `Inline_Paged_Array` with `PART_SET_PAGE_COUNT` pages mapping a thing idx to
+- `indices` - an `Paged_Array` with `PART_SET_PAGE_COUNT` pages mapping a thing idx to
   dense idx + 1. `0` means no part, so a missing or freshly zeroed page is empty.
 - `things` / `parts_data` - dense arrays of owners and part bytes, grown by doubling. Removal swaps the
   last part into the hole and updates its sparse entry, so parts stay packed for iteration.
