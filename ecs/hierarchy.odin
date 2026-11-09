@@ -49,6 +49,13 @@ Hierarchy_Children_Iter :: struct {
 	next: Thing,
 }
 
+/* Iterates a thing and its descendants in pre-order, straight from the links. */
+Hierarchy_Subtree_Iter :: struct {
+	set:  ^Hierarchy_Set,
+	root: Thing,
+	next: Thing,
+}
+
 /*
 Holds one Hierarchy_Set per registered kind of `K`. A set is allocated when its kind is
 registered, with room for things with an idx below `capacity`.
@@ -281,35 +288,12 @@ hierarchy_set_collect_subtree :: proc(
 	thing: Thing,
 	buffer: []Thing,
 ) -> []Thing {
-	hierarchy_set_assert_thing(set, thing)
-	fmt.assertf(len(buffer) > 0, "Subtree of thing %v doesn't fit in the buffer.", thing.idx)
-
-	buffer[0] = thing
-	n := 1
-	cur := set.nodes[thing.idx].first_child
-
-	for cur != THING_NIL {
+	n := 0
+	it := hierarchy_set_iter_subtree(set, thing)
+	for cur in hierarchy_subtree_iter(&it) {
 		fmt.assertf(n < len(buffer), "Subtree of thing %v doesn't fit in the buffer.", thing.idx)
 		buffer[n] = cur
 		n += 1
-
-		if child := set.nodes[cur.idx].first_child; child != THING_NIL {
-			cur = child
-			continue
-		}
-
-		for {
-			if next := hierarchy_node_next_sibling(set, cur.idx); next != THING_NIL {
-				cur = next
-				break
-			}
-
-			cur = set.nodes[cur.idx].parent
-			if cur == thing {
-				cur = THING_NIL
-				break
-			}
-		}
 	}
 
 	return buffer[:n]
@@ -376,12 +360,54 @@ Advances the iterator. Changing the links while iterating is not supported.
 
 Returns the next child and true, or false once every child was returned.
 */
-hierarchy_children_iter_next :: proc(it: ^Hierarchy_Children_Iter) -> (Thing, bool) {
+hierarchy_children_iter :: proc(it: ^Hierarchy_Children_Iter) -> (Thing, bool) {
 	if it.next == THING_NIL do return THING_NIL, false
 
 	thing := it.next
 	it.next = hierarchy_node_next_sibling(it.set, thing.idx)
 	return thing, true
+}
+
+/*
+Makes an iterator over the thing and its descendants, in pre-order. It walks the links, so it is up
+to date without a rebuild and needs no memory. A thing that isn't in the hierarchy yields only
+itself.
+
+Asserts:
+- `thing` is a valid hierarchy thing, see hierarchy_set_parent.
+*/
+hierarchy_set_iter_subtree :: proc(set: ^Hierarchy_Set, thing: Thing) -> Hierarchy_Subtree_Iter {
+	hierarchy_set_assert_thing(set, thing)
+	return Hierarchy_Subtree_Iter{set = set, root = thing, next = thing}
+}
+
+/*
+Advances the iterator. Changing the links while iterating is not supported.
+
+Returns the next thing and true, or false once the whole subtree was returned.
+*/
+hierarchy_subtree_iter :: proc(it: ^Hierarchy_Subtree_Iter) -> (Thing, bool) {
+	cur := it.next
+	if cur == THING_NIL do return THING_NIL, false
+
+	if child := it.set.nodes[cur.idx].first_child; child != THING_NIL {
+		it.next = child
+		return cur, true
+	}
+
+	for up := cur;; up = it.set.nodes[up.idx].parent {
+		if up == it.root {
+			it.next = THING_NIL
+			break
+		}
+
+		if next := hierarchy_node_next_sibling(it.set, up.idx); next != THING_NIL {
+			it.next = next
+			break
+		}
+	}
+
+	return cur, true
 }
 
 /*

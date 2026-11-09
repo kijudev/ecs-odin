@@ -43,6 +43,9 @@ thing_pool_reset :: handle_pool_reset
 /* See handle_pool_count_alive. */
 thing_pool_count_alive :: handle_pool_count_alive
 
+/* See handle_pool_count_free. */
+thing_pool_count_free :: handle_pool_count_free
+
 /* See handle_pool_spawn. */
 thing_pool_spawn :: handle_pool_spawn
 

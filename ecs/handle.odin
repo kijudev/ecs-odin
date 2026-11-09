@@ -114,7 +114,7 @@ handle_pool_reset :: proc(pool: ^Handle_Pool($T)) {
 }
 
 /* Counts the handles that are alive. */
-handle_pool_count_alive :: proc(pool: Handle_Pool($T)) -> int {
+handle_pool_count_alive :: proc(pool: ^Handle_Pool($T)) -> int {
 	return pool.slots_next - 1 - pool.free_count
 }
 
@@ -153,11 +153,16 @@ Checks whether the handle is alive.
 
 Returns false for the nil handle, a stale handle and an `idx` out of range.
 */
-handle_pool_is_alive :: proc(pool: Handle_Pool($T), handle: Handle(T)) -> bool {
+handle_pool_is_alive :: proc(pool: ^Handle_Pool($T), handle: Handle(T)) -> bool {
 	if (int(handle.idx) >= len(pool.slots)) do return false
 
 	slot := pool.slots[handle.idx]
 	return slot.is_alive && slot.gen == handle.gen
+}
+
+/* Counts the killed slots waiting to be reused by `handle_pool_spawn`. */
+handle_pool_count_free :: proc(pool: ^Handle_Pool($T)) -> int {
+	return pool.free_count
 }
 
 /*
@@ -166,7 +171,7 @@ Kills the handle, freeing its slot for reuse.
 Returns false if the handle is already dead.
 */
 handle_pool_kill :: proc(pool: ^Handle_Pool($T), handle: Handle(T)) -> bool {
-	if (handle_pool_is_alive(pool^, handle)) {
+	if (handle_pool_is_alive(pool, handle)) {
 		handle_pool_kill_unchecked(pool, handle)
 		return true
 	}

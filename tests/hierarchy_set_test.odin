@@ -96,7 +96,7 @@ hierarchy_expect_iter :: proc(
 	loc := #caller_location,
 ) {
 	i := 0
-	for thing in ecs.hierarchy_children_iter_next(it) {
+	for thing in ecs.hierarchy_children_iter(it) {
 		if i < len(idxs) do testing.expect_value(t, thing.idx, idxs[i], loc)
 		i += 1
 	}
@@ -436,6 +436,33 @@ hierarchy_set_can_attach_rejects_cycles :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.hierarchy_set_can_attach(&set, h(1), h(2)))
 	testing.expect(t, !ecs.hierarchy_set_can_attach(&set, h(1), h(5)))
 	testing.expect(t, !ecs.hierarchy_set_can_attach(&set, h(6), h(7)))
+}
+
+@(test)
+hierarchy_set_iter_subtree_stays_inside :: proc(t: ^testing.T) {
+	set: ecs.Hierarchy_Set
+	ecs.hierarchy_set_init(&set, ecs.HIERARCHY_SET_MIN_CAPACITY)
+	defer ecs.hierarchy_set_destroy(&set)
+
+	h := hierarchy_thing
+	hierarchy_build(&set)
+
+	Case :: struct {
+		thing: ecs.Thing_Idx,
+		idxs:  []ecs.Thing_Idx,
+	}
+
+	// 2 and 5 have later siblings and 4 an uncle, none of which may leak in.
+	cases := []Case{{1, {1, 2, 4, 5, 3}}, {2, {2, 4, 5}}, {4, {4}}, {5, {5}}, {7, {7}}, {9, {9}}}
+
+	for c in cases {
+		got: [dynamic; 8]ecs.Thing_Idx
+		it := ecs.hierarchy_set_iter_subtree(&set, h(c.thing))
+		for thing in ecs.hierarchy_subtree_iter(&it) do append(&got, thing.idx)
+
+		if !testing.expect_value(t, len(got), len(c.idxs)) do continue
+		for idx, i in got do testing.expect_value(t, idx, c.idxs[i])
+	}
 }
 
 @(test)

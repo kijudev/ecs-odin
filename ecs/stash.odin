@@ -32,7 +32,7 @@ Asserts:
 stash_pool_init :: proc(
 	pool: ^Stash_Pool($K),
 	capacity: int = STASH_POOL_DEFAULT_CAPACITY,
-	allocator := context.allocator,
+	allocator: mem.Allocator = context.allocator,
 ) {
 	fmt.assertf(capacity >= 0, "Stash pool capacity cannot be negative, got %v.", capacity)
 

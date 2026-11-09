@@ -126,7 +126,7 @@ archetype_pool_get_returns_the_things_kinds :: proc(t: ^testing.T) {
 	ecs.archetype_pool_insert(&pool, thing, .Velocity)
 	ecs.archetype_pool_insert(&pool, thing, .Tag)
 
-	a := ecs.archetype_pool_get(pool, thing)
+	a := ecs.archetype_pool_get(&pool, thing)
 	testing.expect(
 		t,
 		ecs.archetype_contains(a, ecs.archetype_make(bit_set[Kind]{.Velocity, .Tag})),
@@ -134,5 +134,5 @@ archetype_pool_get_returns_the_things_kinds :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.archetype_has(a, .Position))
 
 	ecs.archetype_pool_remove_all(&pool, thing)
-	testing.expect(t, ecs.archetype_is_empty(ecs.archetype_pool_get(pool, thing)))
+	testing.expect(t, ecs.archetype_is_empty(ecs.archetype_pool_get(&pool, thing)))
 }

@@ -1,7 +1,6 @@
 package ecs
 
 import "base:intrinsics"
-import "base:runtime"
 import "core:fmt"
 
 // >-------------------------------------------------------- Constants and Types
@@ -330,9 +329,9 @@ stuff_assert_writes :: proc(stuff: Stuff($K, $S), kind: K, loc := #caller_locati
 assert_kills :: proc(stuff: Stuff($K, $S), thing: Thing, loc := #caller_location) {
 	access := stuff.access
 	world := stuff.world
-	if !stuff.is_restricted || !thing_pool_is_alive(world.thing_pool, thing) do return
+	if !stuff.is_restricted || !thing_pool_is_alive(&world.thing_pool, thing) do return
 
-	archetype := archetype_pool_get(world.archetype_pool, thing)
+	archetype := archetype_pool_get(&world.archetype_pool, thing)
 	for kind in archetype.kinds - access.writes {
 		fmt.assertf(
 			false,
@@ -360,15 +359,8 @@ assert_kills :: proc(stuff: Stuff($K, $S), thing: Thing, loc := #caller_location
 @(private = "file", disabled = ODIN_DISABLE_ASSERT)
 assert_kills_tree :: proc(stuff: Stuff($K, $S), kind: K, thing: Thing, loc := #caller_location) {
 	world := stuff.world
-	if !stuff.is_restricted || !thing_pool_is_alive(world.thing_pool, thing) do return
+	if !stuff.is_restricted || !thing_pool_is_alive(&world.thing_pool, thing) do return
 
-	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
-
-	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	buffer, err := make([]Thing, hierarchy_set_count(set) + 1, context.temp_allocator)
-	if err != nil do panic("Failed to allocate memory for checking a tree kill.")
-
-	for tree_thing in hierarchy_set_collect_subtree(set, thing, buffer) {
-		assert_kills(stuff, tree_thing, loc)
-	}
+	it := hierarchy_set_iter_subtree(hierarchy_pool_get_set(&world.hierarchy_pool, kind), thing)
+	for tree_thing in hierarchy_subtree_iter(&it) do assert_kills(stuff, tree_thing, loc)
 }

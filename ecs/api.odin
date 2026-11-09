@@ -453,7 +453,7 @@ get_next_sibling :: proc {
 
 /*
 Makes an iterator over the thing's children, in the order they were attached. Advance it with
-`for child in hierarchy_children_iter_next(&it)`. Attaching, detaching or killing while iterating
+`for child in hierarchy_children_iter(&it)`. Attaching, detaching or killing while iterating
 is not supported.
 
 A dead thing has no children.

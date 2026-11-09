@@ -17,7 +17,7 @@ archetype_pool_init_creates_empty_pool :: proc(t: ^testing.T) {
 
 	thing := ecs.thing_make(1)
 	for kind in PARTS {
-		testing.expect(t, !ecs.archetype_pool_has(pool, thing, kind))
+		testing.expect(t, !ecs.archetype_pool_has(&pool, thing, kind))
 	}
 }
 
@@ -60,8 +60,8 @@ archetype_pool_reset_clears_all_masks :: proc(t: ^testing.T) {
 
 	ecs.archetype_pool_reset(&pool)
 
-	testing.expect(t, !ecs.archetype_pool_has(pool, a, .Position))
-	testing.expect(t, !ecs.archetype_pool_has(pool, b, .Health))
+	testing.expect(t, !ecs.archetype_pool_has(&pool, a, .Position))
+	testing.expect(t, !ecs.archetype_pool_has(&pool, b, .Health))
 	testing.expect_value(t, len(pool.slots), ecs.ARCHETYPE_POOL_MIN_CAPACITY)
 }
 
@@ -77,9 +77,9 @@ archetype_pool_insert_sets_kind :: proc(t: ^testing.T) {
 	ecs.archetype_pool_insert(&pool, thing, .Position)
 	ecs.archetype_pool_insert(&pool, thing, .Velocity)
 
-	testing.expect(t, ecs.archetype_pool_has(pool, thing, .Position))
-	testing.expect(t, ecs.archetype_pool_has(pool, thing, .Velocity))
-	testing.expect(t, !ecs.archetype_pool_has(pool, thing, .Health))
+	testing.expect(t, ecs.archetype_pool_has(&pool, thing, .Position))
+	testing.expect(t, ecs.archetype_pool_has(&pool, thing, .Velocity))
+	testing.expect(t, !ecs.archetype_pool_has(&pool, thing, .Health))
 }
 
 @(test)
@@ -91,11 +91,11 @@ archetype_pool_insert_twice_is_idempotent :: proc(t: ^testing.T) {
 	thing := ecs.thing_make(1)
 	ecs.archetype_pool_insert(&pool, thing, .Position)
 	ecs.archetype_pool_insert(&pool, thing, .Position)
-	testing.expect(t, ecs.archetype_pool_has(pool, thing, .Position))
+	testing.expect(t, ecs.archetype_pool_has(&pool, thing, .Position))
 
 	// A single remove clears it; no counting.
 	ecs.archetype_pool_remove(&pool, thing, .Position)
-	testing.expect(t, !ecs.archetype_pool_has(pool, thing, .Position))
+	testing.expect(t, !ecs.archetype_pool_has(&pool, thing, .Position))
 }
 
 @(test)
@@ -109,8 +109,8 @@ archetype_pool_remove_keeps_other_kinds :: proc(t: ^testing.T) {
 	ecs.archetype_pool_insert(&pool, thing, .Velocity)
 	ecs.archetype_pool_remove(&pool, thing, .Position)
 
-	testing.expect(t, !ecs.archetype_pool_has(pool, thing, .Position))
-	testing.expect(t, ecs.archetype_pool_has(pool, thing, .Velocity))
+	testing.expect(t, !ecs.archetype_pool_has(&pool, thing, .Position))
+	testing.expect(t, ecs.archetype_pool_has(&pool, thing, .Velocity))
 }
 
 @(test)
@@ -123,8 +123,8 @@ archetype_pool_remove_missing_is_noop :: proc(t: ^testing.T) {
 	ecs.archetype_pool_insert(&pool, thing, .Velocity)
 	ecs.archetype_pool_remove(&pool, thing, .Position)
 
-	testing.expect(t, !ecs.archetype_pool_has(pool, thing, .Position))
-	testing.expect(t, ecs.archetype_pool_has(pool, thing, .Velocity))
+	testing.expect(t, !ecs.archetype_pool_has(&pool, thing, .Position))
+	testing.expect(t, ecs.archetype_pool_has(&pool, thing, .Velocity))
 }
 
 @(test)
@@ -138,8 +138,8 @@ archetype_pool_things_are_independent :: proc(t: ^testing.T) {
 	ecs.archetype_pool_insert(&pool, a, .Position)
 	ecs.archetype_pool_insert(&pool, b, .Health)
 
-	testing.expect(t, ecs.archetype_pool_has(pool, a, .Position))
-	testing.expect(t, !ecs.archetype_pool_has(pool, a, .Health))
-	testing.expect(t, ecs.archetype_pool_has(pool, b, .Health))
-	testing.expect(t, !ecs.archetype_pool_has(pool, b, .Position))
+	testing.expect(t, ecs.archetype_pool_has(&pool, a, .Position))
+	testing.expect(t, !ecs.archetype_pool_has(&pool, a, .Health))
+	testing.expect(t, ecs.archetype_pool_has(&pool, b, .Health))
+	testing.expect(t, !ecs.archetype_pool_has(&pool, b, .Position))
 }

@@ -70,8 +70,8 @@ Asserts:
 */
 system_pool_init :: proc(
 	pool: ^System_Pool($K, $S),
-	capacity := SYSTEM_POOL_DEFAULT_CAPACITY,
-	allocator := context.allocator,
+	capacity: int = SYSTEM_POOL_DEFAULT_CAPACITY,
+	allocator: mem.Allocator = context.allocator,
 ) {
 	fmt.assertf(capacity > 0, "System pool capacity has to be greater than 0, got %v.", capacity)
 
@@ -230,7 +230,11 @@ Initializes the graph with room for `capacity` systems, allocated up front with 
 Asserts:
 - `capacity` is greater than 0.
 */
-system_graph_init :: proc(graph: ^System_Graph, capacity: int, allocator := context.allocator) {
+system_graph_init :: proc(
+	graph: ^System_Graph,
+	capacity: int,
+	allocator: mem.Allocator = context.allocator,
+) {
 	fmt.assertf(capacity > 0, "System graph capacity has to be greater than 0, got %v.", capacity)
 
 	adj_matrix, adj_err := make([]bool, capacity * capacity, allocator)

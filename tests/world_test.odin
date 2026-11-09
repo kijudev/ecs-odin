@@ -834,7 +834,7 @@ expect_things :: proc(
 @(private = "file")
 collect_iter :: proc(it: ^ecs.Hierarchy_Children_Iter, buffer: []ecs.Thing) -> []ecs.Thing {
 	n := 0
-	for thing in ecs.hierarchy_children_iter_next(it) {
+	for thing in ecs.hierarchy_children_iter(it) {
 		buffer[n] = thing
 		n += 1
 	}
@@ -959,6 +959,38 @@ kill_tree_now_kills_descendants :: proc(t: ^testing.T) {
 	expect_things(t, ecs.get_hierarchy_order(&world, .Transform), {a, e})
 
 	testing.expect(t, !ecs.kill_tree_now(&world, .Transform, b))
+}
+
+@(test)
+kill_tree_now_kills_a_deep_subtree_only :: proc(t: ^testing.T) {
+	world: World
+	make_world(&world)
+	defer ecs.world_destroy(&world)
+
+	//   a
+	//   ├─ b
+	//   │  ├─ c
+	//   │  │  ├─ d
+	//   │  │  └─ e
+	//   │  └─ f
+	//   └─ g
+	things: [7]ecs.Thing
+	for &thing in things do thing = ecs.spawn(&world)
+	a, b, c, d, e, f, g :=
+		things[0], things[1], things[2], things[3], things[4], things[5], things[6]
+	ecs.attach_now(&world, .Transform, b, a)
+	ecs.attach_now(&world, .Transform, c, b)
+	ecs.attach_now(&world, .Transform, d, c)
+	ecs.attach_now(&world, .Transform, e, c)
+	ecs.attach_now(&world, .Transform, f, b)
+	ecs.attach_now(&world, .Transform, g, a)
+
+	testing.expect(t, ecs.kill_tree_now(&world, .Transform, b))
+	ecs.world_rebuild_hierarchy(&world, .Transform)
+
+	for thing in ([]ecs.Thing{b, c, d, e, f}) do testing.expect(t, !ecs.is_alive(&world, thing))
+	testing.expect_value(t, ecs.count_alive(&world), 2)
+	expect_things(t, ecs.get_hierarchy_order(&world, .Transform), {a, g})
 }
 
 @(test)
@@ -1301,9 +1333,9 @@ hierarchy_system :: proc(stuff: Stuff) {
 	if ecs.get_next_sibling(stuff, .Transform, b) == ecs.THING_NIL do append(&system_log, 22)
 
 	children := ecs.iter_children(stuff, .Transform, a)
-	for _ in ecs.hierarchy_children_iter_next(&children) do append(&system_log, 23)
+	for _ in ecs.hierarchy_children_iter(&children) do append(&system_log, 23)
 	roots := ecs.iter_roots(stuff, .Transform)
-	for _ in ecs.hierarchy_children_iter_next(&roots) do append(&system_log, 24)
+	for _ in ecs.hierarchy_children_iter(&roots) do append(&system_log, 24)
 
 	// Reads the order of the rebuild before the stage.
 	if ecs.is_ancestor(stuff, .Transform, b, c) do append(&system_log, 25)

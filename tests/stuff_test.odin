@@ -169,9 +169,9 @@ access_everything_system :: proc(stuff: Stuff) {
 	_ = ecs.get_first_child(stuff, .Transform, a)
 	_ = ecs.get_next_sibling(stuff, .Transform, b)
 	children := ecs.iter_children(stuff, .Transform, a)
-	for _ in ecs.hierarchy_children_iter_next(&children) {}
+	for _ in ecs.hierarchy_children_iter(&children) {}
 	roots := ecs.iter_roots(stuff, .Transform)
-	for _ in ecs.hierarchy_children_iter_next(&roots) {}
+	for _ in ecs.hierarchy_children_iter(&roots) {}
 	_ = ecs.is_ancestor(stuff, .Transform, a, b)
 	_ = ecs.get_hierarchy_order(stuff, .Transform)
 	_ = ecs.get_hierarchy_depths(stuff, .Transform)

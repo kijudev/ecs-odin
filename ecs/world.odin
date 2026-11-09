@@ -1,7 +1,6 @@
 package ecs
 
 import "base:intrinsics"
-import "base:runtime"
 import "core:fmt"
 import "core:mem"
 
@@ -149,9 +148,9 @@ world_spawn :: proc(world: ^World($K, $S)) -> Thing {
 
 /* See kill_now. */
 world_kill_now :: proc(world: ^World($K, $S), thing: Thing) -> bool {
-	if !thing_pool_is_alive(world.thing_pool, thing) do return false
+	if !thing_pool_is_alive(&world.thing_pool, thing) do return false
 
-	it := archetype_iter_make(archetype_pool_get(world.archetype_pool, thing))
+	it := archetype_iter_make(archetype_pool_get(&world.archetype_pool, thing))
 	for kind in archetype_iter(&it) {
 		part_pool_remove_unchecked(&world.part_pool, thing, kind)
 	}
@@ -165,32 +164,40 @@ world_kill_now :: proc(world: ^World($K, $S), thing: Thing) -> bool {
 /* See kill_tree_now. */
 world_kill_tree_now :: proc(world: ^World($K, $S), kind: K, thing: Thing) -> bool {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, thing) do return false
+	if !thing_pool_is_alive(&world.thing_pool, thing) do return false
 
-	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
+	cur := thing
+	for {
+		for {
+			child := hierarchy_set_first_child(set, cur)
+			if child == THING_NIL do break
+			cur = child
+		}
 
-	buffer, err := make([]Thing, hierarchy_set_count(set) + 1, context.temp_allocator)
-	if err != nil do panic("Failed to allocate memory for killing a tree.")
+		if cur == thing do break
 
-	tree := hierarchy_set_collect_subtree(set, thing, buffer)
-	#reverse for tree_thing in tree do world_kill_now(world, tree_thing)
+		parent := hierarchy_set_parent(set, cur)
+		world_kill_now(world, cur)
+		cur = parent
+	}
 
+	world_kill_now(world, thing)
 	return true
 }
 
 /* See is_alive. */
 world_is_alive :: proc(world: ^World($K, $S), thing: Thing) -> bool {
-	return thing_pool_is_alive(world.thing_pool, thing)
+	return thing_pool_is_alive(&world.thing_pool, thing)
 }
 
 /* See count_alive. */
 world_count_alive :: proc(world: ^World($K, $S)) -> int {
-	return thing_pool_count_alive(world.thing_pool)
+	return thing_pool_count_alive(&world.thing_pool)
 }
 
 /* See count_free. */
 world_count_free :: proc(world: ^World($K, $S)) -> int {
-	return world.thing_pool.free_count
+	return thing_pool_count_free(&world.thing_pool)
 }
 
 // >---------------------------------------------------------------- World Parts
@@ -333,8 +340,8 @@ world_is_hierarchy_registered :: proc(world: ^World($K, $S), kind: K) -> bool {
 /* See attach_now. */
 world_attach_now :: proc(world: ^World($K, $S), kind: K, child, parent: Thing) -> bool {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, child) do return false
-	if !thing_pool_is_alive(world.thing_pool, parent) do return false
+	if !thing_pool_is_alive(&world.thing_pool, child) do return false
+	if !thing_pool_is_alive(&world.thing_pool, parent) do return false
 
 	hierarchy_set_attach(set, child, parent)
 	return true
@@ -343,7 +350,7 @@ world_attach_now :: proc(world: ^World($K, $S), kind: K, child, parent: Thing) -
 /* See detach_now. */
 world_detach_now :: proc(world: ^World($K, $S), kind: K, child: Thing) -> bool {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, child) do return false
+	if !thing_pool_is_alive(&world.thing_pool, child) do return false
 
 	return hierarchy_set_detach(set, child)
 }
@@ -351,7 +358,7 @@ world_detach_now :: proc(world: ^World($K, $S), kind: K, child: Thing) -> bool {
 /* See get_parent. */
 world_get_parent :: proc(world: ^World($K, $S), kind: K, child: Thing) -> Thing {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, child) do return THING_NIL
+	if !thing_pool_is_alive(&world.thing_pool, child) do return THING_NIL
 
 	return hierarchy_set_parent(set, child)
 }
@@ -359,7 +366,7 @@ world_get_parent :: proc(world: ^World($K, $S), kind: K, child: Thing) -> Thing 
 /* See get_first_child. */
 world_get_first_child :: proc(world: ^World($K, $S), kind: K, parent: Thing) -> Thing {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, parent) do return THING_NIL
+	if !thing_pool_is_alive(&world.thing_pool, parent) do return THING_NIL
 
 	return hierarchy_set_first_child(set, parent)
 }
@@ -367,7 +374,7 @@ world_get_first_child :: proc(world: ^World($K, $S), kind: K, parent: Thing) -> 
 /* See get_next_sibling. */
 world_get_next_sibling :: proc(world: ^World($K, $S), kind: K, child: Thing) -> Thing {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, child) do return THING_NIL
+	if !thing_pool_is_alive(&world.thing_pool, child) do return THING_NIL
 
 	return hierarchy_set_next_sibling(set, child)
 }
@@ -379,7 +386,7 @@ world_iter_children :: proc(
 	parent: Thing,
 ) -> Hierarchy_Children_Iter {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, parent) do return Hierarchy_Children_Iter{set = set}
+	if !thing_pool_is_alive(&world.thing_pool, parent) do return Hierarchy_Children_Iter{set = set}
 
 	return hierarchy_set_iter_children(set, parent)
 }
@@ -392,8 +399,8 @@ world_iter_roots :: proc(world: ^World($K, $S), kind: K) -> Hierarchy_Children_I
 /* See is_ancestor. */
 world_is_ancestor :: proc(world: ^World($K, $S), kind: K, ancestor, thing: Thing) -> bool {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, ancestor) do return false
-	if !thing_pool_is_alive(world.thing_pool, thing) do return false
+	if !thing_pool_is_alive(&world.thing_pool, ancestor) do return false
+	if !thing_pool_is_alive(&world.thing_pool, thing) do return false
 
 	return hierarchy_set_is_ancestor(set, ancestor, thing)
 }
@@ -416,7 +423,7 @@ world_get_hierarchy_ends :: proc(world: ^World($K, $S), kind: K) -> []Hierarchy_
 /* See get_subtree. */
 world_get_subtree :: proc(world: ^World($K, $S), kind: K, thing: Thing) -> []Thing {
 	set := hierarchy_pool_get_set(&world.hierarchy_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, thing) do return nil
+	if !thing_pool_is_alive(&world.thing_pool, thing) do return nil
 
 	return hierarchy_set_subtree(set, thing)
 }
@@ -625,7 +632,7 @@ world_run_sync :: proc(world: ^World($K, $S)) {
 @(private = "file")
 set_raw :: proc(world: ^World($K, $S), thing: Thing, kind: K, part: rawptr) -> rawptr {
 	part_pool_assert_registered(&world.part_pool, kind)
-	if !thing_pool_is_alive(world.thing_pool, thing) do return nil
+	if !thing_pool_is_alive(&world.thing_pool, thing) do return nil
 
 	result := part_pool_set_raw(&world.part_pool, thing, kind, part)
 	archetype_pool_insert(&world.archetype_pool, thing, kind)
@@ -658,8 +665,8 @@ apply_cmds :: proc(world: ^World($K, $S), buffer: ^Cmd_Buffer(K)) {
 
 		case Cmd_Attach(K):
 			set := hierarchy_pool_get_set(&world.hierarchy_pool, c.kind)
-			if !thing_pool_is_alive(world.thing_pool, c.child) do continue
-			if !thing_pool_is_alive(world.thing_pool, c.parent) do continue
+			if !thing_pool_is_alive(&world.thing_pool, c.child) do continue
+			if !thing_pool_is_alive(&world.thing_pool, c.parent) do continue
 			if !hierarchy_set_can_attach(set, c.child, c.parent) do continue
 
 			hierarchy_set_attach(set, c.child, c.parent)

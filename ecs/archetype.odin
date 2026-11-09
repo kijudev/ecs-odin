@@ -139,7 +139,7 @@ Checks whether the thing's archetype has the kind.
 Asserts:
 - `thing.idx` is less than the pool capacity.
 */
-archetype_pool_has :: proc(pool: Archetype_Pool($K), thing: Thing, kind: K) -> bool {
+archetype_pool_has :: proc(pool: ^Archetype_Pool($K), thing: Thing, kind: K) -> bool {
 	check_thing(thing, len(pool.slots))
 	return archetype_has(pool.slots[thing.idx], kind)
 }
@@ -183,7 +183,7 @@ Gets the thing's archetype.
 Asserts:
 - `thing.idx` is less than the pool capacity.
 */
-archetype_pool_get :: proc(pool: Archetype_Pool($K), thing: Thing) -> Archetype(K) {
+archetype_pool_get :: proc(pool: ^Archetype_Pool($K), thing: Thing) -> Archetype(K) {
 	check_thing(thing, len(pool.slots))
 	return pool.slots[thing.idx]
 }

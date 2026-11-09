@@ -112,9 +112,9 @@ query_iter :: proc(query: ^Query($K, $S)) -> (Thing, bool) {
 		thing := things[query.pos]
 		query.pos += 1
 
-		if query.is_hierarchy && !thing_pool_is_alive(world.thing_pool, thing) do continue
+		if query.is_hierarchy && !thing_pool_is_alive(&world.thing_pool, thing) do continue
 
-		archetype := archetype_pool_get(world.archetype_pool, thing)
+		archetype := archetype_pool_get(&world.archetype_pool, thing)
 		if satisfies(archetype, query.include, query.exclude) {
 			query.thing = thing
 			return thing, true
