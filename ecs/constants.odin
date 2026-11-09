@@ -55,3 +55,12 @@ CMD_BUFFER_DEFAULT_PARTS_CAPACITY :: 1 << 12
 // >--------------------------------------------------------------------- System
 
 SYSTEM_POOL_DEFAULT_CAPACITY :: 64
+
+// >------------------------------------------------------------------ Hierarchy
+
+HIERARCHY_POOL_MIN_CAPACITY :: THING_POOL_MIN_CAPACITY
+HIERARCHY_POOL_MAX_CAPACITY :: THING_POOL_MAX_CAPACITY
+HIERARCHY_POOL_DEFAULT_CAPACITY :: THING_POOL_DEFAULT_CAPACITY
+
+/* The deepest a thing can sit in a hierarchy, roots are at depth 0. */
+HIERARCHY_MAX_DEPTH :: int(max(Hierarchy_Depth))
