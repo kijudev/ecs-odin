@@ -150,8 +150,7 @@ world_spawn :: proc(world: ^World($K, $S)) -> Thing {
 world_kill_now :: proc(world: ^World($K, $S), thing: Thing) -> bool {
 	if !thing_pool_is_alive(&world.thing_pool, thing) do return false
 
-	it := archetype_iter_make(archetype_pool_get(&world.archetype_pool, thing))
-	for kind in archetype_iter(&it) {
+	for kind in archetype_pool_get(&world.archetype_pool, thing) {
 		part_pool_remove_unchecked(&world.part_pool, thing, kind)
 	}
 

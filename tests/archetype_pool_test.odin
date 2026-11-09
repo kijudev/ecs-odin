@@ -143,3 +143,18 @@ archetype_pool_things_are_independent :: proc(t: ^testing.T) {
 	testing.expect(t, ecs.archetype_pool_has(&pool, b, .Health))
 	testing.expect(t, !ecs.archetype_pool_has(&pool, b, .Position))
 }
+
+@(test)
+archetype_pool_get_returns_the_things_kinds :: proc(t: ^testing.T) {
+	pool: ecs.Archetype_Pool(Kind)
+	ecs.archetype_pool_init(&pool, ecs.ARCHETYPE_POOL_MIN_CAPACITY)
+	defer ecs.archetype_pool_destroy(&pool)
+
+	thing := ecs.thing_make(1)
+	ecs.archetype_pool_insert(&pool, thing, .Velocity)
+	ecs.archetype_pool_insert(&pool, thing, .Tag)
+	testing.expect_value(t, ecs.archetype_pool_get(&pool, thing), bit_set[Kind]{.Velocity, .Tag})
+
+	ecs.archetype_pool_remove_all(&pool, thing)
+	testing.expect_value(t, ecs.archetype_pool_get(&pool, thing), bit_set[Kind]{})
+}

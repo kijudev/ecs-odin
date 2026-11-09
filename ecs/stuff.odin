@@ -332,7 +332,7 @@ assert_kills :: proc(stuff: Stuff($K, $S), thing: Thing, loc := #caller_location
 	if !stuff.is_restricted || !thing_pool_is_alive(&world.thing_pool, thing) do return
 
 	archetype := archetype_pool_get(&world.archetype_pool, thing)
-	for kind in archetype.kinds - access.writes {
+	for kind in archetype - access.writes {
 		fmt.assertf(
 			false,
 			"System %v kills thing %v with part %v without declaring it in writes.",

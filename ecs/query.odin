@@ -9,8 +9,8 @@ import "core:fmt"
 Query_Base :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
 	stuff:   Stuff(K, S),
-	include: Archetype(K),
-	exclude: Archetype(K),
+	include: bit_set[K],
+	exclude: bit_set[K],
 	thing:   Thing,
 	pos:     int,
 }
@@ -67,7 +67,7 @@ Asserts:
 query_refresh :: proc(query: ^Query($K, $S)) {
 	query.first = find_first_kind(&query.base)
 	query.first_set = &query.stuff.world.part_pool.sets[query.first]
-	query.is_filtered = query.include.kinds != {query.first} || query.exclude.kinds != {}
+	query.is_filtered = query.include != {query.first} || query.exclude != {}
 	query.thing = {}
 	query.pos = 0
 }
@@ -280,20 +280,13 @@ base_make :: proc(
 
 	for k in include do part_pool_assert_registered(&stuff.world.part_pool, k)
 
-	return Query_Base(K, S) {
-		stuff = stuff,
-		include = archetype_make(include),
-		exclude = archetype_make(exclude),
-	}
+	return Query_Base(K, S){stuff = stuff, include = include, exclude = exclude}
 }
 
 @(private = "file")
 base_matches :: #force_inline proc(base: ^Query_Base($K, $S), thing: Thing) -> bool {
 	archetype := archetype_pool_get_unchecked(&base.stuff.world.archetype_pool, thing)
-	return(
-		archetype_contains(archetype, base.include) &&
-		archetype_is_disjoint(archetype, base.exclude) \
-	)
+	return archetype & base.include == base.include && archetype & base.exclude == {}
 }
 
 @(private = "file")
@@ -341,8 +334,7 @@ find_first_kind :: proc(base: ^Query_Base($K, $S)) -> K {
 	kind := K{}
 	size := max(int)
 
-	it := archetype_iter_make(base.include)
-	for k in archetype_iter(&it) {
+	for k in base.include {
 		count := part_pool_count_parts(&base.stuff.world.part_pool, k)
 		if count < size {
 			size = count
