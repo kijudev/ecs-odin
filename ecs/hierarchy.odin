@@ -274,32 +274,6 @@ hierarchy_set_can_attach :: proc(set: ^Hierarchy_Set, child, parent: Thing) -> b
 }
 
 /*
-Collects the thing and its descendants into `buffer`, in pre-order. Walks the links, so it is up
-to date without a rebuild. A thing that isn't in the hierarchy collects only itself.
-
-Returns the filled front of `buffer`. `hierarchy_set_count(set) + 1` things always fit.
-
-Asserts:
-- `thing` is a valid hierarchy thing, see hierarchy_set_parent.
-- the subtree fits in `buffer`.
-*/
-hierarchy_set_collect_subtree :: proc(
-	set: ^Hierarchy_Set,
-	thing: Thing,
-	buffer: []Thing,
-) -> []Thing {
-	n := 0
-	it := hierarchy_set_iter_subtree(set, thing)
-	for cur in hierarchy_subtree_iter(&it) {
-		fmt.assertf(n < len(buffer), "Subtree of thing %v doesn't fit in the buffer.", thing.idx)
-		buffer[n] = cur
-		n += 1
-	}
-
-	return buffer[:n]
-}
-
-/*
 Gets the thing's parent.
 
 Returns nil if the thing is a root or isn't in the hierarchy.

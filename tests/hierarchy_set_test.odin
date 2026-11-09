@@ -465,33 +465,6 @@ hierarchy_set_iter_subtree_stays_inside :: proc(t: ^testing.T) {
 	}
 }
 
-@(test)
-hierarchy_set_collect_subtree_walks_links :: proc(t: ^testing.T) {
-	set: ecs.Hierarchy_Set
-	ecs.hierarchy_set_init(&set, ecs.HIERARCHY_SET_MIN_CAPACITY)
-	defer ecs.hierarchy_set_destroy(&set)
-
-	h := hierarchy_thing
-	hierarchy_build(&set)
-
-	// No rebuild needed, it reads the links.
-	ecs.hierarchy_set_attach(&set, h(6), h(3))
-
-	Case :: struct {
-		thing: ecs.Thing_Idx,
-		idxs:  []ecs.Thing_Idx,
-	}
-
-	cases := []Case{{1, {1, 2, 4, 5, 3, 6, 7}}, {2, {2, 4, 5}}, {3, {3, 6, 7}}, {7, {7}}, {9, {9}}}
-
-	buffer: [8]ecs.Thing
-	for c in cases {
-		subtree := ecs.hierarchy_set_collect_subtree(&set, h(c.thing), buffer[:])
-		if !testing.expect_value(t, len(subtree), len(c.idxs)) do continue
-		for thing, i in subtree do testing.expect_value(t, thing.idx, c.idxs[i])
-	}
-}
-
 // >-------------------------------------------------------------------- Rebuild
 
 @(test)
@@ -775,25 +748,5 @@ hierarchy_set_rebuild_too_deep_asserts :: proc(t: ^testing.T) {
 
 	testing.expect_assert_message(t, "Hierarchy is deeper than HIERARCHY_MAX_DEPTH (65535).")
 	ecs.hierarchy_set_rebuild(&set)
-	testing.fail_now(t, "The call did not assert.")
-}
-
-@(test)
-hierarchy_set_collect_subtree_too_small_buffer_asserts :: proc(t: ^testing.T) {
-	// Nothing to check when asserts are compiled out.
-	when ODIN_DISABLE_ASSERT do return
-
-	// The assert skips any cleanup, so take the set from the stack instead of the heap.
-	backing: [8 * mem.Kilobyte]byte
-	arena: mem.Arena
-	mem.arena_init(&arena, backing[:])
-
-	set: ecs.Hierarchy_Set
-	ecs.hierarchy_set_init(&set, ecs.HIERARCHY_SET_MIN_CAPACITY, mem.arena_allocator(&arena))
-	hierarchy_build(&set)
-
-	buffer: [2]ecs.Thing
-	testing.expect_assert_message(t, "Subtree of thing 2 doesn't fit in the buffer.")
-	ecs.hierarchy_set_collect_subtree(&set, hierarchy_thing(2), buffer[:])
 	testing.fail_now(t, "The call did not assert.")
 }

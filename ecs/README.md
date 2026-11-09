@@ -78,9 +78,9 @@ Every call asserts that the kind is registered, and the typed ones that the type
 `Part_Set`. The asserts are also available on their own as `part_pool_assert_registered` and
 `part_pool_assert_type`, and vanish entirely with `-disable-assert`.
 
-Parts are set with `set_value`, `set_pointer` (`nil` zeroes the part) or the untyped `set_raw`.
-There are no proc groups. `remove_all` tries every registered kind; if you already know which
-kinds a thing has, `remove_unchecked` on those is faster.
+Parts are set with the untyped `set_raw` (`nil` zeroes the part); the typed `set_now` variants live
+on the world, which checks the type first. There are no proc groups. To remove every part of a
+thing, the world walks its archetype and calls `remove_unchecked` on each kind.
 
 # Stashes
 
@@ -126,8 +126,8 @@ Children keep the order they were attached in and roots the order they became ro
 order is deterministic.
 
 The set doesn't know whether a thing is alive. The world checks liveness first and removes a
-thing from every set when it is killed, which makes its children roots. `kill_tree_now` collects
-the subtree from the links of one set and kills it bottom-up.
+thing from every set when it is killed, which makes its children roots. `kill_tree_now` walks
+the subtree in the links of one set and kills it bottom-up, without any extra memory.
 
 ## Hierarchy Pool
 

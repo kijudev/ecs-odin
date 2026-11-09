@@ -15,6 +15,13 @@ make_pool :: proc(pool: ^Part_Pool, allocator := context.allocator) {
 	ecs.part_pool_register(pool, .Target, Position)
 }
 
+// Inserts the part the way the world does, through the untyped set.
+@(private = "file")
+set_part :: proc(pool: ^Part_Pool, thing: ecs.Thing, kind: Kind, part: $T) -> ^T {
+	part := part
+	return cast(^T)ecs.part_pool_set_raw(pool, thing, kind, &part)
+}
+
 // >------------------------------------------------------------------ Lifecycle
 
 @(test)
@@ -49,8 +56,8 @@ part_pool_destroy_frees_with_init_allocator :: proc(t: ^testing.T) {
 	pool: Part_Pool
 	make_pool(&pool, mem.tracking_allocator(&track))
 
-	ecs.part_pool_set_value(&pool, ecs.thing_make(1), .Position, Position{1, 2})
-	ecs.part_pool_set_value(&pool, ecs.thing_make(2), .Velocity, Velocity{3, 4})
+	set_part(&pool, ecs.thing_make(1), .Position, Position{1, 2})
+	set_part(&pool, ecs.thing_make(2), .Velocity, Velocity{3, 4})
 	testing.expect(t, len(track.allocation_map) > 0)
 
 	destroyed_count = 0
@@ -69,8 +76,8 @@ part_pool_reset_removes_parts_keeps_registrations :: proc(t: ^testing.T) {
 	defer ecs.part_pool_destroy(&pool)
 
 	thing := ecs.thing_make(1)
-	ecs.part_pool_set_value(&pool, thing, .Position, Position{1, 2})
-	ecs.part_pool_set_value(&pool, thing, .Velocity, Velocity{3, 4})
+	set_part(&pool, thing, .Position, Position{1, 2})
+	set_part(&pool, thing, .Velocity, Velocity{3, 4})
 
 	destroyed_count = 0
 	ecs.part_pool_reset(&pool)
@@ -82,20 +89,20 @@ part_pool_reset_removes_parts_keeps_registrations :: proc(t: ^testing.T) {
 	}
 
 	// Usable again after reset.
-	ecs.part_pool_set_value(&pool, thing, .Position, Position{5, 6})
+	set_part(&pool, thing, .Position, Position{5, 6})
 	testing.expect_value(t, ecs.part_pool_get(&pool, thing, .Position, Position)^, Position{5, 6})
 }
 
 // >------------------------------------------------------------------------ Set
 
 @(test)
-part_pool_set_value_and_get :: proc(t: ^testing.T) {
+part_pool_set_and_get :: proc(t: ^testing.T) {
 	pool: Part_Pool
 	make_pool(&pool)
 	defer ecs.part_pool_destroy(&pool)
 
 	thing := ecs.thing_make(1)
-	result := ecs.part_pool_set_value(&pool, thing, .Position, Position{1, 2})
+	result := set_part(&pool, thing, .Position, Position{1, 2})
 
 	testing.expect(t, ecs.part_pool_has(&pool, thing, .Position))
 	testing.expect(t, ecs.part_pool_get(&pool, thing, .Position, Position) == result)
@@ -103,38 +110,20 @@ part_pool_set_value_and_get :: proc(t: ^testing.T) {
 }
 
 @(test)
-part_pool_set_value_overwrites :: proc(t: ^testing.T) {
+part_pool_set_overwrites :: proc(t: ^testing.T) {
 	pool: Part_Pool
 	make_pool(&pool)
 	defer ecs.part_pool_destroy(&pool)
 
 	thing := ecs.thing_make(1)
-	ecs.part_pool_set_value(&pool, thing, .Position, Position{1, 2})
+	set_part(&pool, thing, .Position, Position{1, 2})
 
 	destroyed_count = 0
-	ecs.part_pool_set_value(&pool, thing, .Position, Position{3, 4})
+	set_part(&pool, thing, .Position, Position{3, 4})
 
 	testing.expect_value(t, destroyed_count, 1)
 	testing.expect_value(t, ecs.part_pool_count_parts(&pool, .Position), 1)
 	testing.expect_value(t, ecs.part_pool_get(&pool, thing, .Position, Position)^, Position{3, 4})
-}
-
-@(test)
-part_pool_set_pointer_copies_or_zeroes :: proc(t: ^testing.T) {
-	pool: Part_Pool
-	make_pool(&pool)
-	defer ecs.part_pool_destroy(&pool)
-
-	a := ecs.thing_make(1)
-	b := ecs.thing_make(2)
-
-	value := Velocity{1, 2}
-	result := ecs.part_pool_set_pointer(&pool, a, .Velocity, &value)
-	testing.expect(t, result != &value)
-	testing.expect_value(t, result^, Velocity{1, 2})
-
-	zeroed := ecs.part_pool_set_pointer(&pool, b, .Velocity, (^Velocity)(nil))
-	testing.expect_value(t, zeroed^, Velocity{})
 }
 
 @(test)
@@ -147,11 +136,12 @@ part_pool_set_raw_copies_or_zeroes :: proc(t: ^testing.T) {
 	b := ecs.thing_make(2)
 
 	value := Velocity{1, 2}
-	ecs.part_pool_set_raw(&pool, a, .Velocity, &value)
-	ecs.part_pool_set_raw(&pool, b, .Velocity, nil)
+	result := cast(^Velocity)ecs.part_pool_set_raw(&pool, a, .Velocity, &value)
+	testing.expect(t, result != &value)
+	testing.expect_value(t, result^, Velocity{1, 2})
 
-	testing.expect_value(t, ecs.part_pool_get(&pool, a, .Velocity, Velocity)^, Velocity{1, 2})
-	testing.expect_value(t, ecs.part_pool_get(&pool, b, .Velocity, Velocity)^, Velocity{})
+	zeroed := cast(^Velocity)ecs.part_pool_set_raw(&pool, b, .Velocity, nil)
+	testing.expect_value(t, zeroed^, Velocity{})
 }
 
 @(test)
@@ -161,8 +151,8 @@ part_pool_kinds_can_share_a_type :: proc(t: ^testing.T) {
 	defer ecs.part_pool_destroy(&pool)
 
 	thing := ecs.thing_make(1)
-	ecs.part_pool_set_value(&pool, thing, .Position, Position{1, 2})
-	ecs.part_pool_set_value(&pool, thing, .Target, Position{3, 4})
+	set_part(&pool, thing, .Position, Position{1, 2})
+	set_part(&pool, thing, .Target, Position{3, 4})
 
 	testing.expect_value(t, ecs.part_pool_get(&pool, thing, .Position, Position)^, Position{1, 2})
 	testing.expect_value(t, ecs.part_pool_get(&pool, thing, .Target, Position)^, Position{3, 4})
@@ -178,7 +168,7 @@ part_pool_zero_sized_parts :: proc(t: ^testing.T) {
 	defer ecs.part_pool_destroy(&pool)
 
 	thing := ecs.thing_make(1)
-	ecs.part_pool_set_value(&pool, thing, .Tag, Tag{})
+	set_part(&pool, thing, .Tag, Tag{})
 
 	testing.expect(t, ecs.part_pool_has(&pool, thing, .Tag))
 	testing.expect(t, ecs.part_pool_get(&pool, thing, .Tag, Tag) != nil)
@@ -194,7 +184,7 @@ part_pool_get_missing_part_returns_nil :: proc(t: ^testing.T) {
 	defer ecs.part_pool_destroy(&pool)
 
 	thing := ecs.thing_make(1)
-	ecs.part_pool_set_value(&pool, thing, .Position, Position{1, 2})
+	set_part(&pool, thing, .Position, Position{1, 2})
 
 	testing.expect(t, !ecs.part_pool_has(&pool, thing, .Velocity))
 	testing.expect(t, ecs.part_pool_get(&pool, thing, .Velocity, Velocity) == nil)
@@ -208,7 +198,7 @@ part_pool_stale_thing_does_not_see_part :: proc(t: ^testing.T) {
 
 	old := ecs.thing_make(1, 0)
 	current := ecs.thing_make(1, 1)
-	ecs.part_pool_set_value(&pool, current, .Position, Position{1, 2})
+	set_part(&pool, current, .Position, Position{1, 2})
 
 	testing.expect(t, !ecs.part_pool_has(&pool, old, .Position))
 	testing.expect(t, ecs.part_pool_get(&pool, old, .Position, Position) == nil)
@@ -223,7 +213,7 @@ part_pool_get_parts_and_things_match_up :: proc(t: ^testing.T) {
 	defer ecs.part_pool_destroy(&pool)
 
 	for i in 1 ..= 5 {
-		ecs.part_pool_set_value(&pool, ecs.thing_make(u32(i)), .Position, Position{f32(i), 0})
+		set_part(&pool, ecs.thing_make(u32(i)), .Position, Position{f32(i), 0})
 	}
 	ecs.part_pool_remove(&pool, ecs.thing_make(2), .Position)
 
@@ -246,7 +236,7 @@ part_pool_remove_removes_part :: proc(t: ^testing.T) {
 	defer ecs.part_pool_destroy(&pool)
 
 	thing := ecs.thing_make(1)
-	ecs.part_pool_set_value(&pool, thing, .Position, Position{1, 2})
+	set_part(&pool, thing, .Position, Position{1, 2})
 
 	destroyed_count = 0
 	testing.expect(t, ecs.part_pool_remove(&pool, thing, .Position))
@@ -257,31 +247,10 @@ part_pool_remove_removes_part :: proc(t: ^testing.T) {
 	testing.expect(t, !ecs.part_pool_remove(&pool, thing, .Position))
 }
 
-@(test)
-part_pool_remove_all_removes_every_kind :: proc(t: ^testing.T) {
-	pool: Part_Pool
-	make_pool(&pool)
-	defer ecs.part_pool_destroy(&pool)
-
-	a := ecs.thing_make(1)
-	b := ecs.thing_make(2)
-	ecs.part_pool_set_value(&pool, a, .Position, Position{1, 2})
-	ecs.part_pool_set_value(&pool, a, .Velocity, Velocity{3, 4})
-	ecs.part_pool_set_value(&pool, a, .Tag, Tag{})
-	ecs.part_pool_set_value(&pool, b, .Position, Position{5, 6})
-
-	ecs.part_pool_remove_all(&pool, a)
-
-	for kind in PARTS {
-		testing.expect(t, !ecs.part_pool_has(&pool, a, kind))
-	}
-	testing.expect_value(t, ecs.part_pool_get(&pool, b, .Position, Position)^, Position{5, 6})
-}
-
 // >------------------------------------------------------------------ Unchecked
 
 @(test)
-part_pool_unchecked_variants :: proc(t: ^testing.T) {
+part_pool_unchecked_get_and_remove :: proc(t: ^testing.T) {
 	pool: Part_Pool
 	make_pool(&pool)
 	defer ecs.part_pool_destroy(&pool)
@@ -290,10 +259,9 @@ part_pool_unchecked_variants :: proc(t: ^testing.T) {
 	b := ecs.thing_make(2)
 	c := ecs.thing_make(3)
 
-	value := Velocity{3, 4}
-	ecs.part_pool_set_value_unchecked(&pool, a, .Velocity, Velocity{1, 2})
-	ecs.part_pool_set_pointer_unchecked(&pool, b, .Velocity, &value)
-	ecs.part_pool_set_raw_unchecked(&pool, c, .Velocity, nil)
+	set_part(&pool, a, .Velocity, Velocity{1, 2})
+	set_part(&pool, b, .Velocity, Velocity{3, 4})
+	set_part(&pool, c, .Velocity, Velocity{})
 
 	testing.expect_value(
 		t,
@@ -368,7 +336,9 @@ part_pool_unchecked_still_asserts :: proc(t: ^testing.T) {
 	ecs.part_pool_init(&pool)
 	ecs.part_pool_register(&pool, .Target, Position)
 
+	set_part(&pool, ecs.thing_make(1), .Target, Position{})
+
 	testing.expect_assert_message(t, "Part kind Target is a Position, not a Velocity.")
-	ecs.part_pool_set_value_unchecked(&pool, ecs.thing_make(1), .Target, Velocity{})
+	ecs.part_pool_get_unchecked(&pool, ecs.thing_make(1), .Target, Velocity)
 	testing.fail_now(t, "The call did not assert.")
 }

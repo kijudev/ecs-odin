@@ -410,85 +410,9 @@ part_pool_get_things :: proc(pool: ^Part_Pool($K), kind: K) -> []Thing {
 }
 
 /*
-Inserts the part, or overwrites the one the thing already has. See part_set_insert.
-
-Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
-
-Asserts:
-- `kind` is registered.
-- `T` is the type `kind` was registered with.
-- `thing` is not THING_NIL.
-- no other thing with the same `idx` has a part of this kind.
-*/
-part_pool_set_value :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: $T) -> ^T {
-	part := part
-	return part_pool_set_pointer(pool, thing, kind, &part)
-}
-
-/*
-Inserts the part without checking whether the thing already has one. See
-part_set_insert_unchecked.
-
-Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
-
-Asserts:
-- `kind` is registered.
-- `T` is the type `kind` was registered with.
-- `thing` is not THING_NIL.
-- the kind's set is not full.
-*/
-part_pool_set_value_unchecked :: proc(
-	pool: ^Part_Pool($K),
-	thing: Thing,
-	kind: K,
-	part: $T,
-) -> ^T {
-	part := part
-	return part_pool_set_pointer_unchecked(pool, thing, kind, &part)
-}
-
-/*
 Inserts a copy of the part `part` points to, or overwrites the one the thing already has. A nil
-`part` zeroes it. See part_set_insert.
-
-Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
-
-Asserts:
-- `kind` is registered.
-- `T` is the type `kind` was registered with.
-- `thing` is not THING_NIL.
-- no other thing with the same `idx` has a part of this kind.
-*/
-part_pool_set_pointer :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: ^$T) -> ^T {
-	part_pool_assert_type(pool, kind, T)
-	return cast(^T)part_set_insert(&pool.sets[kind], thing, part)
-}
-
-/*
-Inserts a copy of the part `part` points to without checking whether the thing already has one. A
-nil `part` inserts a zeroed one. See part_set_insert_unchecked.
-
-Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
-
-Asserts:
-- `kind` is registered.
-- `T` is the type `kind` was registered with.
-- `thing` is not THING_NIL.
-- the kind's set is not full.
-*/
-part_pool_set_pointer_unchecked :: proc(
-	pool: ^Part_Pool($K),
-	thing: Thing,
-	kind: K,
-	part: ^$T,
-) -> ^T {
-	part_pool_assert_type(pool, kind, T)
-	return cast(^T)part_set_insert_unchecked(&pool.sets[kind], thing, part)
-}
-
-/*
-Untyped `part_pool_set_pointer`: `part` has to point to a value of the registered type, or be
-nil.
+`part` zeroes it. The pool can't check the type, so `part` has to point to a value of the
+registered type, or be nil. See part_set_insert.
 
 Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
 
@@ -500,27 +424,6 @@ Asserts:
 part_pool_set_raw :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K, part: rawptr) -> rawptr {
 	part_pool_assert_registered(pool, kind)
 	return part_set_insert(&pool.sets[kind], thing, part)
-}
-
-/*
-Untyped `part_pool_set_pointer_unchecked`: `part` has to point to a value of the registered type,
-or be nil.
-
-Returns a pointer to the part in the pool, valid until a part of this kind is inserted or removed.
-
-Asserts:
-- `kind` is registered.
-- `thing` is not THING_NIL.
-- the kind's set is not full.
-*/
-part_pool_set_raw_unchecked :: proc(
-	pool: ^Part_Pool($K),
-	thing: Thing,
-	kind: K,
-	part: rawptr,
-) -> rawptr {
-	part_pool_assert_registered(pool, kind)
-	return part_set_insert_unchecked(&pool.sets[kind], thing, part)
 }
 
 /*
@@ -546,16 +449,6 @@ Asserts:
 part_pool_remove_unchecked :: proc(pool: ^Part_Pool($K), thing: Thing, kind: K) {
 	part_pool_assert_registered(pool, kind)
 	part_set_remove_unchecked(&pool.sets[kind], thing)
-}
-
-/*
-Removes the thing's part of every registered kind, trying each one. When the thing's kinds are
-known, prefer `part_pool_remove_unchecked`.
-*/
-part_pool_remove_all :: proc(pool: ^Part_Pool($K), thing: Thing) {
-	for kind in pool.registered {
-		part_set_remove(&pool.sets[kind], thing)
-	}
 }
 
 // >------------------------------------------------------------------ Internals
