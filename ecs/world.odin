@@ -49,9 +49,10 @@ World_Params :: struct {
 /*
 Initializes the world, sized and allocated by `params`. See World_Params.
 
-`capacity` caps the number of things and sizes every hierarchy registered later, `stash_capacity`
-the bytes of all stashes together and `system_capacity` the systems of each stage. `cmd_capacity` and `cmd_parts_capacity` are only the
-starting room of the command buffer, it grows past them.
+`capacity` caps the number of things and sizes every hierarchy registered later,
+`stash_capacity` the bytes of all stashes together and `system_capacity` the systems of each
+stage. `cmd_capacity` and `cmd_parts_capacity` are only the starting room of the command buffer,
+it grows past them.
 
 Asserts:
 - `capacity` is between THING_POOL_MIN_CAPACITY and THING_POOL_MAX_CAPACITY.
@@ -545,7 +546,8 @@ it can be applied to several worlds; resetting it is up to the caller.
 
 Asserts:
 - `buffer` is not the world's own buffer, use `world_apply` for that.
-- every kind in the buffer is a registered part, and set values match its type's size.
+- every part kind in the buffer is a registered part, and set values match its type's size.
+- every hierarchy kind in the buffer is a registered hierarchy.
 */
 world_apply_buffer :: proc(world: ^World($K, $S), buffer: ^Cmd_Buffer(K)) {
 	assert(buffer != &world.cmd_buffer, "Use world_apply to apply the world's own buffer.")

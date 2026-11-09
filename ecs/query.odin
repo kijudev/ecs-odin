@@ -6,22 +6,25 @@ import "core:fmt"
 // >-------------------------------------------------------- Constants and Types
 
 /*
-Iterates the things that have every kind of `include` and none of `exclude`.
+Iterates the things that have every kind of `include` and none of `exclude`. A plain query walks
+the smallest part set of `include`; a hierarchy query walks the order of the `hierarchy` kind.
 */
 Query :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {
-	stuff:   Stuff(K, S),
-	include: Archetype(K),
-	exclude: Archetype(K),
-	first:   K,
-	thing:   Thing,
-	pos:     int,
+	stuff:        Stuff(K, S),
+	include:      Archetype(K),
+	exclude:      Archetype(K),
+	first:        K,
+	hierarchy:    K,
+	is_hierarchy: bool,
+	thing:        Thing,
+	pos:          int,
 }
 
 // >---------------------------------------------------------------------- Query
 
 /*
-Makes a query ready for the first `query_next`. It walks the smallest part set of `include`.
+Makes a query ready for the first `query_iter`. It walks the smallest part set of `include`.
 
 Asserts:
 - `include` is not empty.
@@ -45,41 +48,76 @@ query_make :: proc(stuff: Stuff($K, $S), include: bit_set[K], exclude: bit_set[K
 }
 
 /*
-Picks the smallest part set of `include` again and starts the iteration over.
+Makes a query ready for the first `query_iter` that walks the order of the hierarchy of `kind`,
+so a parent always comes before its children. It sees the order of the last rebuild: things
+killed since then are skipped, things attached since then only show up after the next rebuild.
+Things in the hierarchy without the parts are skipped, their children are still visited.
+
+Asserts:
+- `kind` is a registered hierarchy.
+- `include` is not empty.
+- no kind is in both `include` and `exclude`.
+- every kind of `include` is a registered part.
+*/
+query_make_hierarchy :: proc(
+	stuff: Stuff($K, $S),
+	kind: K,
+	include: bit_set[K],
+	exclude: bit_set[K],
+) -> Query(K, S) {
+	hierarchy_pool_assert_registered(&stuff.world.hierarchy_pool, kind)
+
+	query := query_make(stuff, include, exclude)
+	query.hierarchy = kind
+	query.is_hierarchy = true
+	return query
+}
+
+/*
+Starts the iteration over. A plain query picks the smallest part set of `include` again.
 
 Asserts:
 - every kind of `include` is a registered part.
 */
 query_refresh :: proc(query: ^Query($K, $S)) {
-	query.first = find_first_kind(query)
+	if !query.is_hierarchy do query.first = find_first_kind(query)
 	query.thing = {}
 	query.pos = 0
 }
 
 /*
-Moves to the next matching thing.
+Moves to the next matching thing, for `for thing in query_iter(&query)`.
 
-Returns false once there are no more things, and clears the current thing. Adding or removing
-parts of the included kinds while iterating can skip or repeat things, use the `_later` procs for
-that.
+Returns the thing and true, or false once there are no more things, and clears the current thing.
+Adding or removing parts of the included kinds while iterating can skip or repeat things, use the
+`_later` procs for that. Rebuilding the hierarchy of a hierarchy query while iterating is not
+supported.
 */
-query_next :: proc(query: ^Query($K, $S)) -> bool {
+query_iter :: proc(query: ^Query($K, $S)) -> (Thing, bool) {
 	world := query.stuff.world
-	things := part_pool_get_things(&world.part_pool, query.first)
+	things: []Thing
+
+	if query.is_hierarchy {
+		things = hierarchy_set_order(&world.hierarchy_pool.sets[query.hierarchy])
+	} else {
+		things = part_pool_get_things(&world.part_pool, query.first)
+	}
 
 	for query.pos < len(things) {
 		thing := things[query.pos]
 		query.pos += 1
-		archetype := archetype_pool_get(world.archetype_pool, thing)
 
+		if query.is_hierarchy && !thing_pool_is_alive(world.thing_pool, thing) do continue
+
+		archetype := archetype_pool_get(world.archetype_pool, thing)
 		if satisfies(archetype, query.include, query.exclude) {
 			query.thing = thing
-			return true
+			return thing, true
 		}
 	}
 
 	query.thing = {}
-	return false
+	return {}, false
 }
 
 // >-------------------------------------------------------- Query Current Thing
@@ -108,7 +146,68 @@ query_get_thing :: proc(query: ^Query($K, $S)) -> Thing {
 	return query.thing
 }
 
+/* See get_parent. */
+query_get_parent :: proc(query: ^Query($K, $S)) -> Thing {
+	assert_hierarchy_thing(query)
+	return world_get_parent(query.stuff.world, query.hierarchy, query.thing)
+}
+
+/*
+Gets the part of the current thing's parent in the query's hierarchy. Meant for propagating
+values down a tree: the parent was visited before the current thing, unless the thing moved to a
+new parent since the last rebuild. Rebuild before the pass to rule that out.
+
+Returns nil if the current thing is a root or its parent doesn't have the part. The pointer is
+valid until a part of this kind is added to or removed from any thing.
+
+Asserts:
+- the query is a hierarchy query and has a current thing.
+- `kind` is a registered part.
+- `T` is the type `kind` was registered with.
+*/
+query_get_parent_part :: proc(query: ^Query($K, $S), kind: K, $T: typeid) -> ^T {
+	return world_get_part(query.stuff.world, query_get_parent(query), kind, T)
+}
+
+/*
+Gets the depth of the current thing in the query's hierarchy, as of the last rebuild. Roots are at
+depth 0.
+
+Asserts:
+- the query is a hierarchy query and has a current thing.
+*/
+query_get_depth :: proc(query: ^Query($K, $S)) -> Hierarchy_Depth {
+	assert_hierarchy_thing(query)
+
+	depths := hierarchy_set_depths(&query.stuff.world.hierarchy_pool.sets[query.hierarchy])
+	return depths[query.pos - 1]
+}
+
+/*
+Skips the descendants of the current thing, so the next `query_iter` continues after its subtree.
+The current thing stays current until then.
+
+Asserts:
+- the query is a hierarchy query and has a current thing.
+*/
+query_skip_subtree :: proc(query: ^Query($K, $S)) {
+	assert_hierarchy_thing(query)
+
+	ends := hierarchy_set_ends(&query.stuff.world.hierarchy_pool.sets[query.hierarchy])
+	query.pos = int(ends[query.pos - 1])
+}
+
 // >------------------------------------------------------------------ Internals
+
+@(private = "file")
+assert_hierarchy_thing :: proc(query: ^Query($K, $S), loc := #caller_location) {
+	fmt.assertf(
+		query.is_hierarchy,
+		"Query has no hierarchy, make it with query_make_hierarchy.",
+		loc = loc,
+	)
+	fmt.assertf(query.thing != {}, "Query has no current thing.", loc = loc)
+}
 
 @(private = "file")
 satisfies :: proc(archetype: Archetype($K), include: Archetype(K), exclude: Archetype(K)) -> bool {

@@ -1293,7 +1293,8 @@ run_orders_systems_on_hierarchies :: proc(t: ^testing.T) {
 	}
 }
 
-@(private = "file")
+// The things the hierarchy systems below work on.
+@(private = "file", thread_local)
 hierarchy_things: [4]ecs.Thing
 
 @(private = "file")

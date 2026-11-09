@@ -4,7 +4,8 @@ import ecs "../ecs"
 
 // >---------------------------------------------------------------------- Kinds
 
-// Parts, stashes and hierarchies share one enum. Which one a kind is depends on how it gets registered.
+// Parts, stashes and hierarchies share one enum. Which one a kind is depends on how it gets
+// registered.
 Kind :: enum {
 	// Parts
 	Position,

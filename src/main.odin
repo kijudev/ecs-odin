@@ -119,7 +119,7 @@ system_fall :: proc(stuff: Stuff) {
 	gravity := ecs.get_stash(stuff, .Gravity, Gravity)
 
 	query := ecs.query_make(stuff, {.Velocity}, {})
-	for ecs.query_next(&query) {
+	for _ in ecs.query_iter(&query) {
 		vel := ecs.get_part(&query, .Velocity, Velocity)
 		vel.y += gravity.y * dt
 	}
@@ -129,7 +129,7 @@ system_move :: proc(stuff: Stuff) {
 	dt := ecs.get_stash(stuff, .Time, Time).delta
 
 	query := ecs.query_make(stuff, {.Position, .Velocity}, {})
-	for ecs.query_next(&query) {
+	for _ in ecs.query_iter(&query) {
 		pos := ecs.get_part(&query, .Position, Position)
 		vel := ecs.get_part(&query, .Velocity, Velocity)
 
@@ -141,16 +141,16 @@ system_move :: proc(stuff: Stuff) {
 system_poison :: proc(stuff: Stuff) {
 	query := ecs.query_make(stuff, {.Health, .Poisoned}, {})
 
-	for ecs.query_next(&query) {
+	for _ in ecs.query_iter(&query) {
 		ecs.get_part(&query, .Health, Health).value -= 1
 	}
 }
 
 system_reap :: proc(stuff: Stuff) {
 	query := ecs.query_make(stuff, {.Health}, {})
-	for ecs.query_next(&query) {
+	for thing in ecs.query_iter(&query) {
 		if ecs.get_part(&query, .Health, Health).value <= 0 {
-			ecs.kill_later(stuff, ecs.get_thing(&query))
+			ecs.kill_later(stuff, thing)
 		}
 	}
 }
@@ -160,8 +160,7 @@ system_report :: proc(stuff: Stuff) {
 	fmt.printfln("frame %v, %v alive", frame, ecs.count_alive(stuff))
 
 	query := ecs.query_make(stuff, {.Position, .Health}, {})
-	for ecs.query_next(&query) {
-		thing := ecs.get_thing(&query)
+	for thing in ecs.query_iter(&query) {
 		pos := ecs.get_part(&query, .Position, Position)
 		hp := ecs.get_part(&query, .Health, Health)
 		fmt.printfln("  thing %v: pos (%.1f, %.1f), hp %v", thing.idx, pos.x, pos.y, hp.value)

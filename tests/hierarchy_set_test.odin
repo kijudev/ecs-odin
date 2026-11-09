@@ -8,6 +8,7 @@ import ecs "../ecs"
 // >-------------------------------------------------------------------- Helpers
 
 // Things 1 to 7 with gen 0, so tests can name them by idx.
+@(private = "file")
 hierarchy_thing :: proc(idx: ecs.Thing_Idx) -> ecs.Thing {
 	return ecs.thing_make(idx)
 }
@@ -15,6 +16,7 @@ hierarchy_thing :: proc(idx: ecs.Thing_Idx) -> ecs.Thing {
 // Builds two trees, in pre-order:
 // 1, 2, 4, 5, 3
 // 6, 7
+@(private = "file")
 hierarchy_build :: proc(set: ^ecs.Hierarchy_Set) {
 	h := hierarchy_thing
 	ecs.hierarchy_set_attach(set, h(2), h(1))
@@ -26,6 +28,7 @@ hierarchy_build :: proc(set: ^ecs.Hierarchy_Set) {
 
 // Chains things 1 to `count` with `count` as the root, so thing 1 sits at depth `count - 1`.
 // Attaching above the root keeps every cycle check O(1).
+@(private = "file")
 hierarchy_build_chain :: proc(set: ^ecs.Hierarchy_Set, count: int) {
 	for idx in 1 ..< count {
 		ecs.hierarchy_set_attach(
@@ -36,6 +39,7 @@ hierarchy_build_chain :: proc(set: ^ecs.Hierarchy_Set, count: int) {
 	}
 }
 
+@(private = "file")
 hierarchy_expect_order :: proc(
 	t: ^testing.T,
 	set: ^ecs.Hierarchy_Set,
@@ -48,6 +52,7 @@ hierarchy_expect_order :: proc(
 	for thing, i in order do testing.expect_value(t, thing.idx, idxs[i], loc)
 }
 
+@(private = "file")
 hierarchy_expect_depths :: proc(
 	t: ^testing.T,
 	set: ^ecs.Hierarchy_Set,
@@ -60,6 +65,7 @@ hierarchy_expect_depths :: proc(
 	for depth, i in got do testing.expect_value(t, depth, depths[i], loc)
 }
 
+@(private = "file")
 hierarchy_expect_children :: proc(
 	t: ^testing.T,
 	set: ^ecs.Hierarchy_Set,
@@ -71,6 +77,7 @@ hierarchy_expect_children :: proc(
 	hierarchy_expect_iter(t, &it, idxs, loc)
 }
 
+@(private = "file")
 hierarchy_expect_roots :: proc(
 	t: ^testing.T,
 	set: ^ecs.Hierarchy_Set,
@@ -81,6 +88,7 @@ hierarchy_expect_roots :: proc(
 	hierarchy_expect_iter(t, &it, idxs, loc)
 }
 
+@(private = "file")
 hierarchy_expect_iter :: proc(
 	t: ^testing.T,
 	it: ^ecs.Hierarchy_Children_Iter,
@@ -387,7 +395,9 @@ hierarchy_set_remove_root_and_leaf :: proc(t: ^testing.T) {
 	testing.expect_value(t, ecs.hierarchy_set_count(&set), 3)
 	hierarchy_expect_roots(t, &set, {2})
 	hierarchy_expect_order(t, &set, {2, 4, 5})
-	for idx in ([]ecs.Thing_Idx{1, 3, 6, 7}) do testing.expect(t, !ecs.hierarchy_set_contains(&set, h(idx)))
+	for idx in ([]ecs.Thing_Idx{1, 3, 6, 7}) {
+		testing.expect(t, !ecs.hierarchy_set_contains(&set, h(idx)))
+	}
 }
 
 @(test)

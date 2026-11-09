@@ -114,8 +114,8 @@ thing is alive.
   `first_child`, `next_sibling` and `prev_sibling`, each a full `Thing`. Siblings form a circular
   list, so the first child's `prev_sibling` is the last child and attaching or detaching is O(1).
   Node 0 is a virtual root whose children are the roots of every tree. A node knows its own handle
-  as `next_sibling.prev_sibling`, which lets the pool assert on stale handles without storing it.
-- **The order**, a cache. `hierarchy_pool_rebuild` walks the links and writes `order` (every tree in
+  as `next_sibling.prev_sibling`, which lets the set assert on stale handles without storing it.
+- **The order**, a cache. `hierarchy_set_rebuild` walks the links and writes `order` (every tree in
   pre-order), `depths`, `ends` (one past each subtree, so a subtree is `order[i:ends[i]]`) and
   `pos` (thing idx to position). The walk needs no stack and no extra memory. Changing the links
   only sets `is_dirty`; nothing rebuilds on its own.
@@ -140,7 +140,8 @@ killed thing from every set.
 # Commands
 
 `Cmd_Buffer($K)` records deferred mutations as a `Cmd($K)` union (`Cmd_Kill`, `Cmd_Set_Value`,
-`Cmd_Set_Zero`, `Cmd_Remove`, `Cmd_Attach`, `Cmd_Detach`, `Cmd_Kill_Tree`) in record order. It only stores commands; applying them is up to the caller.
+`Cmd_Set_Zero`, `Cmd_Remove`, `Cmd_Attach`, `Cmd_Detach`, `Cmd_Kill_Tree`) in record order. It only
+stores commands; applying them is up to the caller.
 
 Part values are copied into a single `parts` byte buffer, packed without padding. `Cmd_Set_Value`
 keeps the `offset` and `size` of its bytes. `cmd_buffer_get_bytes` returns them as a slice, valid until
@@ -150,10 +151,10 @@ packed offset may be misaligned for `T`. Offsets and sizes are `u32`, so the buf
 
 # World
 
-`World($K, $S)` owns a `Thing_Pool`, a `Part_Pool(K)`, an `Archetype_Pool(K)`, a `Hierarchy_Pool(K)`, a `Cmd_Buffer(K)`,
-a `Stash_Pool(K)` and a `System_Pool(K, S)`. `S` is the enum of system stages. `world_init` takes a
-`World_Params`, where a zero field means its default, so `world_init(&world, {capacity = 1024})` is
-enough.
+`World($K, $S)` owns a `Thing_Pool`, a `Part_Pool(K)`, an `Archetype_Pool(K)`, a
+`Hierarchy_Pool(K)`, a `Cmd_Buffer(K)`, a `Stash_Pool(K)` and a `System_Pool(K, S)`. `S` is the
+enum of system stages. `world_init` takes a `World_Params`, where a zero field means its default,
+so `world_init(&world, {capacity = 1024})` is enough.
 
 Sizes come in three kinds:
 
@@ -206,26 +207,37 @@ touching the same stash are ordered the same way as two touching the same part. 
 a system only touches what it declared. `world_run_stage_sync` runs one stage and
 `world_run_sync` runs every stage in the order of `S`. Neither applies commands: the main loop is
 the caller's, and it decides where the sync points go, with `world_apply` for commands and
-`world_rebuild_hierarchy` or `world_rebuild_hierarchies` for the hierarchy orders.
+`world_rebuild_hierarchy` or `world_rebuild_hierarchies` for the hierarchy orders. The stage graph
+is rebuilt on the next run whenever systems were scheduled since the last build. Everything runs
+on one thread for now. `world_reset` keeps the scheduled systems.
 
 A hierarchy kind goes into `reads` and `writes` like a part or stash kind. Only `attach_now`,
 `detach_now` and the kills write a hierarchy, and only the link reads (`get_parent`,
 `iter_children`, ...) read it in a way that can conflict. `_later` calls only touch the command
 buffer, and the order only changes at a rebuild, which runs outside systems. Note that `kill_now`
-writes every hierarchy and every part kind of the thing without declaring it. The stage graph is rebuilt on the next run
-whenever systems were scheduled since the last build. Everything runs on one thread for now.
-`world_reset` keeps the scheduled systems.
+writes every hierarchy and every part kind of the thing without declaring it.
 
 # Stuff and Queries
 
-`Stuff($K, $S)` is what a system gets. It forwards to its world, but only for things, parts
-and stashes: it cannot register kinds, apply commands or init/destroy/reset the world.
+`Stuff($K, $S)` is what a system gets. It forwards to its world, but only for things, parts,
+hierarchies and stashes: it cannot register kinds, apply commands, rebuild hierarchies or
+init/destroy/reset the world.
 
 `Query($K, $S)` iterates the things that have every kind of `include` and none of `exclude`.
 `include` cannot be empty and cannot share a kind with `exclude`. It walks the smallest part set of
 `include`, picked in `query_make` and again in `query_refresh`, which also starts the iteration over.
-`query.thing` is the current thing (nil once `query_next` returns false), and `query_has` and
-`query_get_part` read it.
+Iterate it with `for thing in query_iter(&query)`. `query.thing` is the current thing (nil once
+`query_iter` returns false), and `query_has` and `query_get_part` read it.
+
+`query_make_hierarchy(stuff, kind, include, exclude)` makes a query that walks the order of a
+hierarchy instead, so a parent always comes before its children, which is what propagating values
+down a tree needs. It filters by archetype the same way. A thing in the hierarchy without the parts
+is skipped while its children are still visited, and a thing outside the hierarchy is never
+visited. The order is the one of the last rebuild: things killed since then are skipped (the
+order keeps full handles, so a reused slot is skipped too), and things attached since then show
+up after the next rebuild. For the current thing, `query_get_parent` and `query_get_parent_part`
+read the links, `query_get_depth` reads the order, and `query_skip_subtree` jumps past its
+descendants in O(1) using `ends`.
 
 # API
 

@@ -5,8 +5,8 @@ import "base:intrinsics"
 // >-------------------------------------------------------- Constants and Types
 
 /*
-What a system gets to work with. It can touch things, parts and stashes, but cannot register
-kinds, apply commands or init/destroy/reset the world.
+What a system gets to work with. It can touch things, parts, hierarchies and stashes, but cannot
+register kinds, apply commands, rebuild hierarchies or init/destroy/reset the world.
 */
 Stuff :: struct($K: typeid, $S: typeid) where intrinsics.type_is_enum(K),
 	intrinsics.type_is_enum(S) {

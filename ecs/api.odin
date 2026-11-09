@@ -129,7 +129,7 @@ count_free :: proc {
 /*
 Gets the query's current thing.
 
-Returns THING_NIL before the first `query_next` and once it returns false.
+Returns THING_NIL before the first `query_iter` and once it returns false.
 */
 get_thing :: proc {
 	query_get_thing,
@@ -357,16 +357,19 @@ detach_later :: proc {
 }
 
 /*
-Gets the thing's parent.
+Gets the thing's parent. The query variant gets the parent of the current thing in the query's
+hierarchy, read from the links rather than the order.
 
 Returns THING_NIL if the thing is dead, a root or not in the hierarchy.
 
 Asserts:
 - `kind` is a registered hierarchy.
+- the query is a hierarchy query and has a current thing (query variant only).
 */
 get_parent :: proc {
 	world_get_parent,
 	stuff_get_parent,
+	query_get_parent,
 }
 
 /*

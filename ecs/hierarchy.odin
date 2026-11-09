@@ -43,6 +43,12 @@ Hierarchy_Set :: struct {
 	allocator:   mem.Allocator,
 }
 
+/* Iterates the children of one thing, or the roots, in sibling order. */
+Hierarchy_Children_Iter :: struct {
+	set:  ^Hierarchy_Set,
+	next: Thing,
+}
+
 /*
 Holds one Hierarchy_Set per registered kind of `K`. A set is allocated when its kind is
 registered, with room for things with an idx below `capacity`.
@@ -52,12 +58,6 @@ Hierarchy_Pool :: struct($K: typeid) where intrinsics.type_is_enum(K) {
 	registered: bit_set[K],
 	capacity:   int,
 	allocator:  mem.Allocator,
-}
-
-/* Iterates the children of one thing, or the roots, in sibling order. */
-Hierarchy_Children_Iter :: struct {
-	set:  ^Hierarchy_Set,
-	next: Thing,
 }
 
 // >-------------------------------------------------------------- Hierarchy_Set
@@ -661,8 +661,10 @@ hierarchy_node_unlink_and_prune :: proc(set: ^Hierarchy_Set, idx: Thing_Idx) {
 	parent := set.nodes[idx].parent
 	hierarchy_node_unlink(set, idx)
 
+	if parent == THING_NIL do return
+
 	parent_node := set.nodes[parent.idx]
-	if parent == THING_NIL || parent_node.first_child != THING_NIL || parent_node.parent != THING_NIL do return
+	if parent_node.first_child != THING_NIL || parent_node.parent != THING_NIL do return
 
 	hierarchy_node_unlink(set, parent.idx)
 	set.count -= 1
