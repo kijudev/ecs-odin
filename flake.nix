@@ -26,6 +26,7 @@
             pkgs.just
             pkgs.clang
             pkgs.python3
+            pkgs.samply
           ];
 
           ENTT_INCLUDE = "${pkgs.entt}/include";

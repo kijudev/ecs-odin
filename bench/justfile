@@ -7,6 +7,7 @@ cc := "clang"
 cxxflags := "-std=c++23 -O3 -DNDEBUG -Wall -Icommon"
 sizes := "10000,100000,1000000"
 
+# Same as quick.
 default: quick
 
 # Every library at 100k, then the comparison.
@@ -15,22 +16,32 @@ quick: (oecs "100000") (entt "100000") (flecs "100000") compare
 # Every library at every size, then the comparison.
 full: (oecs sizes) (entt sizes) (flecs sizes) compare
 
+# Build and run the oecs benchmark into build/oecs.csv, e.g. `just bench oecs 100000 --case 'query.*'`.
 oecs n=sizes *args: _dir
     odin build oecs -o:speed -disable-assert -no-bounds-check -out:build/oecs
     build/oecs --n {{n}} {{args}} > build/oecs.csv
 
+# Build and run the EnTT benchmark into build/entt.csv.
 entt n=sizes *args: _dir
     {{cxx}} {{cxxflags}} -I"$ENTT_INCLUDE" entt/*.cpp common/*.cpp -o build/entt
     build/entt --n {{n}} {{args}} > build/entt.csv
 
+# Build and run the flecs benchmark into build/flecs.csv (flecs.o is built once and cached).
 flecs n=sizes *args: _dir
     @[ -f build/flecs.o ] || {{cc}} -std=gnu99 -O3 -DNDEBUG -c "$FLECS_SRC/distr/flecs.c" -o build/flecs.o
     {{cxx}} {{cxxflags}} -I"$FLECS_SRC/distr" flecs/*.cpp common/*.cpp build/flecs.o -o build/flecs
     build/flecs --n {{n}} {{args}} > build/flecs.csv
 
+# Profile oecs in samply's Firefox Profiler UI, e.g. `just bench profile 'query.*' 1000000`.
+profile case="*" n="100000": _dir
+    odin build oecs -o:speed -disable-assert -no-bounds-check -debug -out:build/oecs-prof
+    samply record build/oecs-prof --n {{n}} --case '{{case}}' > /dev/null
+
+# Print the comparison table from every CSV in build.
 compare:
     python3 compare.py build/*.csv
 
+# Delete the benchmark build output.
 clean:
     rm -rf build
 
