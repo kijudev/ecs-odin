@@ -26,7 +26,10 @@
             pkgs.just
             pkgs.clang
             pkgs.python3
-            pkgs.samply
+            # nixpkgs' samply forgets to link sqlite, drop the override once upstream fixes it.
+            (pkgs.samply.overrideAttrs (old: {
+              buildInputs = (old.buildInputs or [ ]) ++ [ pkgs.sqlite ];
+            }))
           ];
 
           ENTT_INCLUDE = "${pkgs.entt}/include";
